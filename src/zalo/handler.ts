@@ -2,13 +2,28 @@ import { config } from "../config.js";
 import { repository } from "../db.js";
 import { answerGroup, summarizeGroup } from "../ai/assistant.js";
 import { handleTaiXiu } from "../games/tai-xiu.js";
+import { parseTaiXiu } from "../games/tai-xiu-rules.js";
 import { KeyedSerialQueue } from "../queue.js";
 import { downloadZaloImage } from "../ai/image.js";
 import { handleMusic } from "../music/service.js";
+import { parseMusicIntent } from "../music/rules.js";
 import type { IncomingGroupMessage } from "../types.js";
 import { zaloClient } from "./client.js";
 
-const queue = new KeyedSerialQueue(25);
+type MessageLane = "game" | "music" | "ai";
+
+const queues: Record<MessageLane, KeyedSerialQueue> = {
+  game: new KeyedSerialQueue(20),
+  music: new KeyedSerialQueue(8),
+  ai: new KeyedSerialQueue(8),
+};
+
+function messageLane(question: string, hasImage: boolean): MessageLane {
+  if (hasImage) return "ai";
+  if (parseTaiXiu(question)) return "game";
+  if (parseMusicIntent(question)) return "music";
+  return "ai";
+}
 
 async function processMessage(message: IncomingGroupMessage, question: string) {
   try {
@@ -114,14 +129,16 @@ export function startMessageHandler() {
         ? "Hãy xem ảnh này và giải thích hoặc giải bài trong ảnh."
         : "");
     if (!question) return;
-    void queue
-      .enqueue(message.groupId, () => processMessage(message, question))
+    const lane = messageLane(question, Boolean(message.imageUrl));
+    const senderKey = `${message.groupId}:${message.senderId}`;
+    void queues[lane]
+      .enqueue(senderKey, () => processMessage(message, question))
       .catch(async (error) => {
         console.error("Message queue error", error);
         await zaloClient
           .send(
             message.groupId,
-            "Nhóm đang có quá nhiều yêu cầu. Vui lòng thử lại sau ít phút.",
+            "Bạn đang có quá nhiều yêu cầu cùng lúc. Vui lòng chờ bot xử lý xong rồi thử lại.",
             message.raw,
           )
           .catch(() => {});

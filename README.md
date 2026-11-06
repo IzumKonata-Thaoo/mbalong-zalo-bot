@@ -122,6 +122,8 @@ yt-dlp --version
 
 Đây là tích hợp không chính thức và phụ thuộc giao diện công khai của SoundCloud, nên cần cập nhật `yt-dlp` nếu SoundCloud thay đổi hệ thống.
 
+Tin nhắn được phân thành ba luồng độc lập: trò chơi, nhạc và AI. Mỗi người dùng vẫn được xử lý FIFO trong từng luồng để lệnh `tìm nhạc` luôn đứng trước `chọn`, nhưng người khác trong cùng nhóm không còn phải đợi một lượt tải nhạc hoàn tất. Tìm kiếm chỉ lấy metadata; luồng audio được phân giải sau khi chọn và cache ngắn hạn. Tối đa bốn đoạn nhạc có thể được chuyển đổi đồng thời.
+
 Bot đọc được ảnh JPEG, PNG, WEBP và GIF trong nhóm. Thành viên gửi ảnh kèm caption có tag `@MbaLong`, hoặc trả lời một ảnh rồi tag bot, để mô tả ảnh, hỏi đáp hoặc giải bài; model được chọn trong trang admin phải hỗ trợ vision/multimodal.
 
 ### DeepSeek

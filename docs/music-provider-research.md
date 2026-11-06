@@ -34,7 +34,7 @@ The implemented credential-free route uses `yt-dlp` with these restrictions:
 4. Prefer a format whose `format_id` contains `preview`. This is grounded in the extractor source: it sets `is_preview` for SoundCloud `snipped` media and URLs containing `/preview/` or `/playlist/0/30/`, then appends `preview` to `format_id`. If no labelled preview exists, only a standard public format with non-premium quality is eligible; original `download` and premium formats are excluded.
 5. Never request private tracks, `secret_token` URLs, cookies, `.netrc`, username/password, OAuth tokens, DRM media, premium/HQ formats or original downloads.
 6. Pass the chosen public playback URL to `ffmpeg` with `-t 30`, transcode to AAC/M4A, enforce a small file limit, upload it for Zalo voice delivery, and delete it immediately. The local cap prevents forwarding a full track.
-7. Allow only one or two conversions at once, use short process/network timeouts, apply per-user/group cooldowns, and pin a tested `yt-dlp` version. Add a health check because client-ID extraction can break without notice.
+7. Keep conversion concurrency bounded, use short process/network timeouts, apply per-user queues, and pin a tested `yt-dlp` version. Add a health check because client-ID extraction can break without notice.
 
 This design deliberately refuses full public streams even if a tool exposes them. A track being publicly playable does not automatically grant permission to download or redistribute the whole recording.
 
@@ -60,4 +60,4 @@ This design deliberately refuses full public streams even if a tool exposes them
 - `YTDLP_PATH` (default `yt-dlp`)
 - `FFMPEG_PATH` (default `ffmpeg`)
 
-Only SoundCloud/SoundCloud-CDN HTTPS URLs are accepted by the conversion layer. Conversions are capped at two concurrent processes, time out after 45 seconds, produce at most 8 MB, and always remove temporary files.
+Only SoundCloud/SoundCloud-CDN HTTPS URLs are accepted by the conversion layer. Conversions are capped at four concurrent processes, time out after 45 seconds, produce at most 8 MB, and always remove temporary files. Search uses flat metadata so six results do not resolve six media streams; only the selected track is resolved, and that signed stream URL is cached for five minutes.

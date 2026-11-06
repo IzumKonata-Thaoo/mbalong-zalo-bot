@@ -6,6 +6,13 @@ interface YtDlpResult {
   stderr: string;
 }
 
+interface CachedStream {
+  url: string;
+  expiresAt: number;
+}
+
+const streamCache = new Map<string, CachedStream>();
+
 export interface YtDlpTrack {
   id: string;
   title: string;
@@ -124,13 +131,14 @@ export async function searchPublicSoundCloud(
     [
       "--ignore-config",
       "--no-warnings",
+      "--flat-playlist",
       "--skip-download",
       "--playlist-end",
       String(count),
       "--dump-single-json",
       `scsearch${count}:${safeQuery}`,
     ],
-    35_000,
+    15_000,
   );
   return parseYtDlpSearchJson(stdout, count);
 }
@@ -140,22 +148,36 @@ export async function resolvePublicSoundCloudStream(
 ): Promise<string> {
   const safeUrl = publicSoundCloudUrl(trackUrl);
   if (!safeUrl) throw new Error("URL track SoundCloud không hợp lệ");
+  const cached = streamCache.get(safeUrl);
+  if (cached && cached.expiresAt > Date.now()) return cached.url;
+  streamCache.delete(safeUrl);
   const { stdout } = await runYtDlp(
     [
       "--ignore-config",
       "--no-warnings",
+      "--socket-timeout",
+      "10",
       "--no-playlist",
       "--format",
       "bestaudio[format_id*=preview]/bestaudio[quality<=0][format_id!=download]",
       "--get-url",
       safeUrl,
     ],
-    30_000,
+    20_000,
   );
   const streamUrl = stdout
     .split(/\r?\n/)
     .map((line) => line.trim())
     .find(Boolean);
   if (!streamUrl) throw new Error("yt-dlp không tìm thấy luồng âm thanh công khai");
+  streamCache.set(safeUrl, {
+    url: streamUrl,
+    expiresAt: Date.now() + 5 * 60_000,
+  });
+  if (streamCache.size > 100)
+    for (const [key, entry] of streamCache) {
+      if (entry.expiresAt <= Date.now() || streamCache.size > 80)
+        streamCache.delete(key);
+    }
   return streamUrl;
 }

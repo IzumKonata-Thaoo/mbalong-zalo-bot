@@ -10,7 +10,7 @@ const waiters: Array<() => void> = [];
 let activeConversions = 0;
 
 async function acquireConversionSlot() {
-  if (activeConversions >= 2)
+  if (activeConversions >= 4)
     await new Promise<void>((resolve) => waiters.push(resolve));
   activeConversions++;
 }
