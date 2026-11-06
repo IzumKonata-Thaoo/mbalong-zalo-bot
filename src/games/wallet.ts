@@ -31,13 +31,17 @@ export function handleWalletCommand(
       senderMember?.role,
     )
   )
-    return `Bạn không có quyền cộng hoặc trừ số dư.\n\nUID bot nhận: ${message.senderId}\nRole trong nhóm: ${senderMember?.role ?? "chưa đồng bộ"}\n\nHãy thêm đúng UID trên vào ZALO_ADMIN_IDS hoặc bấm “Làm mới” thành viên trong web admin.`;
+    return "Bạn không có quyền thực hiện lệnh này.";
   if (command.kind === "invalid") return `⚠️ Cú pháp chưa đúng.\n\n${adjustGuide}`;
 
   const mentionedTargets = [
     ...new Set(
       message.mentions
-        .map((mention) => String(mention.uid ?? ""))
+        .map((mention) =>
+          repository.resolveMemberId(message.groupId, [
+            String(mention.uid ?? ""),
+          ]),
+        )
         .filter((id) => id && id !== botId),
     ),
   ];
@@ -46,8 +50,9 @@ export function handleWalletCommand(
   if (command.explicitTargetId && mentionedTargets.length)
     return "Chỉ dùng một cách chọn người nhận: tag tài khoản hoặc nhập Zalo ID.";
 
-  const targetId =
-    command.explicitTargetId ?? mentionedTargets[0] ?? message.senderId;
+  const targetId = repository.resolveMemberId(message.groupId, [
+    command.explicitTargetId ?? mentionedTargets[0] ?? message.senderId,
+  ]);
   const member = repository.member(message.groupId, targetId);
   if (targetId !== message.senderId && !member)
     return "Không tìm thấy Zalo ID này trong danh sách thành viên nhóm. Hãy tag người đó hoặc làm mới member trên web admin.";

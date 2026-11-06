@@ -12,6 +12,7 @@ import { extractZaloPhoto } from "./media.js";
 import { withM4aPreview } from "../music/audio.js";
 import { buildGroupVoicePayload } from "./voice.js";
 import { normalizeZaloQuote } from "./quote.js";
+import { normalizeGroupMembers } from "./members.js";
 
 type ZaloApi = any;
 
@@ -126,17 +127,33 @@ class ZaloClient extends EventEmitter {
         info?.name ?? known?.name ?? `Nhóm ${groupId}`,
         info?.totalMember ?? known?.member_count ?? 0,
       );
-      if (info) this.saveMembers(groupId, info);
+      if (info)
+        await this.saveMembers(groupId, info).catch((error) => {
+          this.lastError = `Không đồng bộ được thành viên nhóm ${groupId}: ${String(error)}`;
+          console.warn(this.lastError);
+        });
+      const senderId = repository.resolveMemberId(groupId, [
+        data.uidFrom,
+        data.userId,
+        data.uin,
+        data.senderId,
+      ]);
+      const mentions = Array.isArray(data.mentions)
+        ? data.mentions.map((mention: any) => ({
+            ...mention,
+            uid: repository.resolveMemberId(groupId, [mention?.uid]),
+          }))
+        : [];
       const parsed: IncomingGroupMessage = {
         groupId,
-        senderId: String(data.uidFrom ?? data.senderId ?? ""),
+        senderId,
         senderName: String(data.dName ?? data.displayName ?? "Thành viên"),
         content:
           typeof data.content === "string"
             ? data.content
             : (photo?.caption ?? ""),
         messageId: String(data.msgId ?? data.cliMsgId ?? ""),
-        mentions: Array.isArray(data.mentions) ? data.mentions : [],
+        mentions,
         quoted: data?.quote,
         imageUrl: photo?.url,
         raw: message,
@@ -240,25 +257,34 @@ class ZaloClient extends EventEmitter {
     const info = await this.groupInfo(groupId);
     if (!info) throw new Error("Không tìm thấy nhóm");
     repository.upsertGroup(groupId, info.name, info.totalMember);
-    this.saveMembers(groupId, info);
+    await this.saveMembers(groupId, info);
     return info;
   }
-  private saveMembers(groupId: string, info: any) {
-    const admins = new Set((info.adminIds ?? []).map(String));
-    const profiles = new Map(
-      (info.currentMems ?? []).map((m: any) => [String(m.id), m]),
-    );
-    const members = (info.memberIds ?? []).map((id: unknown) => {
-      const key = String(id),
-        m: any = profiles.get(key);
-      return {
-        id: key,
-        name: m?.dName || m?.zaloName || `Zalo ${key}`,
-        avatar: m?.avatar,
-        role: admins.has(key) ? "admin" : "member",
-      };
-    });
-    if (members.length) repository.upsertMembers(groupId, members);
+  private async saveMembers(groupId: string, info: any) {
+    if (!this.api) throw new Error("Zalo chưa kết nối");
+    const ids = [
+      ...(Array.isArray(info?.memberIds) ? info.memberIds : []),
+      ...(Array.isArray(info?.currentMems)
+        ? info.currentMems.map((member: any) => member?.id)
+        : []),
+    ].map((id) => String(id ?? "").trim()).filter(Boolean);
+    const uniqueIds = [...new Set(ids)];
+    const profiles: any[] = [];
+    for (let offset = 0; offset < uniqueIds.length; offset += 50) {
+      const result = await this.api.getGroupMembersInfo(
+        uniqueIds.slice(offset, offset + 50),
+      );
+      profiles.push(...Object.values(result?.profiles ?? {}));
+    }
+    const normalized = normalizeGroupMembers(info, profiles);
+    if (!normalized.members.length && uniqueIds.length)
+      throw new Error("Zalo không trả về hồ sơ thành viên của nhóm");
+    if (normalized.members.length)
+      repository.replaceMembers(
+        groupId,
+        normalized.members,
+        normalized.aliases,
+      );
   }
   async addMember(groupId: string, zaloId: string) {
     if (!this.api) throw new Error("Zalo chưa kết nối");

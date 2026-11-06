@@ -26,6 +26,13 @@ CREATE TABLE IF NOT EXISTS members (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY(group_id, zalo_id)
 );
+CREATE TABLE IF NOT EXISTS member_aliases (
+  group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  alias_id TEXT NOT NULL,
+  zalo_id TEXT NOT NULL,
+  PRIMARY KEY(group_id, alias_id)
+);
+CREATE INDEX IF NOT EXISTS idx_member_aliases_zalo_id ON member_aliases(group_id, zalo_id);
 CREATE TABLE IF NOT EXISTS messages (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   group_id TEXT NOT NULL,
@@ -98,6 +105,34 @@ export const repository = {
       ON CONFLICT(group_id,zalo_id) DO UPDATE SET display_name=excluded.display_name,avatar=excluded.avatar,role=excluded.role,updated_at=CURRENT_TIMESTAMP`);
     db.transaction(() => members.forEach((m) => stmt.run(groupId,m.id,m.name,m.avatar ?? null,m.role ?? "member")))();
     db.prepare("UPDATE groups SET member_count=? WHERE id=?").run(members.length,groupId);
+  },
+  replaceMembers(
+    groupId: string,
+    members: Array<{id:string;name:string;avatar?:string;role?:string}>,
+    aliases: Array<{aliasId:string;zaloId:string}>,
+  ) {
+    const memberStmt = db.prepare(`INSERT INTO members(group_id,zalo_id,display_name,avatar,role) VALUES(?,?,?,?,?)`);
+    const aliasStmt = db.prepare(`INSERT INTO member_aliases(group_id,alias_id,zalo_id) VALUES(?,?,?)
+      ON CONFLICT(group_id,alias_id) DO UPDATE SET zalo_id=excluded.zalo_id`);
+    db.transaction(() => {
+      db.prepare("DELETE FROM member_aliases WHERE group_id=?").run(groupId);
+      db.prepare("DELETE FROM members WHERE group_id=?").run(groupId);
+      members.forEach((m) => memberStmt.run(groupId,m.id,m.name,m.avatar ?? null,m.role ?? "member"));
+      aliases.forEach((a) => aliasStmt.run(groupId,a.aliasId,a.zaloId));
+      db.prepare("UPDATE groups SET member_count=? WHERE id=?").run(members.length,groupId);
+    })();
+  },
+  resolveMemberId(groupId:string, candidates:Array<string|undefined|null>) {
+    const aliasQuery = db.prepare("SELECT zalo_id FROM member_aliases WHERE group_id=? AND alias_id=?");
+    const memberQuery = db.prepare("SELECT zalo_id FROM members WHERE group_id=? AND zalo_id=?");
+    const ids = candidates.map((value) => String(value ?? "").trim()).filter(Boolean);
+    for (const id of ids) {
+      const alias = aliasQuery.get(groupId,id) as {zalo_id:string}|undefined;
+      if (alias?.zalo_id) return alias.zalo_id;
+      const member = memberQuery.get(groupId,id) as {zalo_id:string}|undefined;
+      if (member?.zalo_id) return member.zalo_id;
+    }
+    return ids[0] ?? "";
   },
   members(groupId: string) { return db.prepare("SELECT * FROM members WHERE group_id=? ORDER BY role DESC,display_name").all(groupId); },
   member(groupId:string,zaloId:string) { return db.prepare("SELECT * FROM members WHERE group_id=? AND zalo_id=?").get(groupId,zaloId) as {zalo_id:string;display_name:string;role:string}|undefined; },
