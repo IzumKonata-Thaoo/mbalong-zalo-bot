@@ -239,8 +239,42 @@ function Dashboard() {
     const t = setInterval(load, 8000);
     return () => clearInterval(t);
   }, [load]);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [clearStatus, setClearStatus] = useState("");
+  useEffect(() => {
+    if (!confirmClear) return;
+    const t = setTimeout(() => setConfirmClear(false), 5000);
+    return () => clearTimeout(t);
+  }, [confirmClear]);
+  const clearContext = async () => {
+    if (!confirmClear) {
+      setConfirmClear(true);
+      setClearStatus("");
+      return;
+    }
+    setConfirmClear(false);
+    setClearing(true);
+    try {
+      const r = await api<{ messages: number }>("/context", {
+        method: "DELETE",
+      });
+      setClearStatus(`Đã xoá ${r.messages.toLocaleString("vi")} tin`);
+      await load();
+    } catch (e) {
+      setClearStatus((e as Error).message);
+    } finally {
+      setClearing(false);
+    }
+  };
   if (!data) return <PageLoader />;
-  const cards = [
+  const cards: Array<{
+    label: string;
+    value: number;
+    sub: string;
+    icon: React.ReactNode;
+    action?: React.ReactNode;
+  }> = [
     {
       label: "Nhóm đã cho phép",
       value: data.stats.activeGroups,
@@ -256,8 +290,23 @@ function Dashboard() {
     {
       label: "Tin đã ghi nhớ",
       value: data.stats.messages,
-      sub: "Dùng cho ngữ cảnh",
+      sub: clearStatus || "Dùng cho ngữ cảnh",
       icon: <MessageSquareText />,
+      action: (
+        <button
+          className={`text-btn clear-context${confirmClear ? " armed" : ""}`}
+          disabled={clearing}
+          onClick={clearContext}
+          title="Xoá bộ nhớ hội thoại và bản tóm tắt AI của mọi nhóm. Ví, thành viên và cấu hình giữ nguyên."
+        >
+          <Trash2 />
+          {clearing
+            ? "Đang xoá…"
+            : confirmClear
+              ? "Bấm lần nữa để xoá"
+              : "Xoá ngữ cảnh"}
+        </button>
+      ),
     },
   ];
   return (
@@ -278,6 +327,7 @@ function Dashboard() {
               <span>{c.label}</span>
               <strong>{c.value.toLocaleString("vi")}</strong>
               <small>{c.sub}</small>
+              {c.action}
             </div>
           </article>
         ))}

@@ -83,6 +83,11 @@ export function createServer() {
       audits: repository.audits(8),
     }),
   );
+  app.delete("/api/context", (req: AuthRequest, res) => {
+    const cleared = repository.clearAllContext();
+    repository.audit(req.admin!.sub, "ai.context_clear_all", undefined, cleared);
+    res.json({ ok: true, ...cleared });
+  });
   app.get("/api/groups", (_req, res) => res.json(repository.groups()));
   app.post("/api/groups", async (req: AuthRequest, res, next) => {
     try {

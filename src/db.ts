@@ -164,6 +164,14 @@ export const repository = {
       return { messages, summaries };
     })();
   },
+  /** Forget the AI context of every group. Wallets, members and settings stay. */
+  clearAllContext() {
+    return db.transaction(() => {
+      const messages = db.prepare("DELETE FROM messages").run().changes;
+      const summaries = db.prepare("DELETE FROM summaries").run().changes;
+      return { messages, summaries };
+    })();
+  },
   saveSummary(groupId: string, content: string, throughId: number) {
     db.prepare(`INSERT INTO summaries(group_id,content,through_message_id) VALUES(?,?,?)
       ON CONFLICT(group_id) DO UPDATE SET content=excluded.content,through_message_id=excluded.through_message_id,updated_at=CURRENT_TIMESTAMP`).run(groupId, content, throughId);
