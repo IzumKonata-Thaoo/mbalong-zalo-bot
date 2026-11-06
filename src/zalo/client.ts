@@ -13,11 +13,34 @@ import { withM4aPreview } from "../music/audio.js";
 import { buildGroupVoicePayload } from "./voice.js";
 import { normalizeZaloQuote } from "./quote.js";
 import {
+  describeGroupInfo,
+  emptyLinkedSnapshot,
+  extractGroupAdminIds,
   extractGroupMemberIds,
   fetchGroupMemberProfiles,
   fetchLinkedGroupSnapshot,
+  isNumericZaloId,
   normalizeGroupMembers,
+  usableId,
+  type LinkedGroupSnapshot,
 } from "./members.js";
+import { hasWalletAdminPermission } from "../games/wallet-auth.js";
+
+export interface MemberSyncReport {
+  synced: number;
+  total: number;
+  partial: boolean;
+  sources: {
+    groupInfo: number;
+    link: number;
+    linkEnabled: boolean;
+    linkPages: number;
+    history: number;
+  };
+  warnings: string[];
+}
+
+const ADMIN_CACHE_MS = 20_000;
 
 type ZaloApi = any;
 
@@ -27,6 +50,7 @@ class ZaloClient extends EventEmitter {
   ownId = "";
   accountName = "";
   lastError = "";
+  private adminCache = new Map<string, { at: number; ids: Set<string> }>();
 
   snapshot() {
     return {
@@ -69,6 +93,7 @@ class ZaloClient extends EventEmitter {
       console.log(
         "  Dùng ID ở trên cho ZALO_ADMIN_IDS nếu tài khoản bot cũng là admin.\n",
       );
+      void this.refreshEnabledGroups();
     } catch (error) {
       this.setStatus(
         "error",
@@ -155,6 +180,7 @@ class ZaloClient extends EventEmitter {
       const parsed: IncomingGroupMessage = {
         groupId,
         senderId,
+        senderIds: senderCandidates,
         senderName: String(data.dName ?? data.displayName ?? "Thành viên"),
         content:
           typeof data.content === "string"
@@ -272,29 +298,155 @@ class ZaloClient extends EventEmitter {
     const result = await this.api.getGroupInfo(groupId);
     return result.gridInfoMap?.[groupId];
   }
-  async refreshGroup(groupId: string) {
+  /** All IDs that belong to the bot account itself. */
+  botIds(groupId?: string) {
+    const ids = new Set<string>([this.ownId].filter(Boolean));
+    if (groupId && this.ownId)
+      for (const id of repository.identityIds(groupId, [this.ownId])) ids.add(id);
+    return ids;
+  }
+  private async linkedSnapshot(groupId: string, allPages: boolean) {
+    if (!this.api) throw new Error("Zalo chưa kết nối");
+    try {
+      return await fetchLinkedGroupSnapshot(groupId, this.api, allPages);
+    } catch (error) {
+      return emptyLinkedSnapshot(errorMessage(error));
+    }
+  }
+  /**
+   * Owner + deputy IDs straight from Zalo (getGroupInfo and the join-link
+   * endpoint). Cached briefly so a burst of /nap commands stays cheap.
+   */
+  async groupAdminIds(groupId: string, force = false): Promise<Set<string>> {
+    const cached = this.adminCache.get(groupId);
+    if (!force && cached && Date.now() - cached.at < ADMIN_CACHE_MS)
+      return cached.ids;
+    const ids = new Set<string>();
+    const info = await this.groupInfo(groupId).catch((error) => {
+      console.warn(`[admin] getGroupInfo ${groupId} lỗi: ${errorMessage(error)}`);
+      return null;
+    });
+    for (const id of extractGroupAdminIds(info)) ids.add(id);
+    const linked = await this.linkedSnapshot(groupId, false);
+    for (const id of extractGroupAdminIds(linked)) ids.add(id);
+    if (!ids.size)
+      console.warn(
+        `[admin] Không đọc được trưởng/phó nhóm ${groupId} từ Zalo` +
+          (linked.error ? ` (link: ${linked.error})` : ""),
+      );
+    this.adminCache.set(groupId, { at: Date.now(), ids });
+    return ids;
+  }
+  /** Raw sender IDs + stored aliases + IDs from the sender's Zalo profile. */
+  private async senderIdentity(groupId: string, rawIds: string[]) {
+    const ids = repository.identityIds(groupId, rawIds);
+    if (!this.api) return ids;
+    const lookup = [...ids].filter(isNumericZaloId);
+    if (lookup.length) {
+      const profiles = await fetchGroupMemberProfiles(lookup, (batch) =>
+        this.api!.getGroupMembersInfo(batch),
+      ).catch(() => [] as any[]);
+      for (const profile of profiles)
+        for (const id of [profile.__lookupId, profile.id, profile.globalId]) {
+          const normalized = usableId(id);
+          if (normalized) ids.add(normalized);
+        }
+    }
+    return ids;
+  }
+  /**
+   * Live permission check for special commands: ZALO_ADMIN_IDS, the group
+   * owner or any deputy. Does not depend on the member list being complete.
+   */
+  async isGroupAdmin(message: IncomingGroupMessage): Promise<boolean> {
+    const raw = [message.senderId, ...message.senderIds];
+    const quick = repository.identityIds(message.groupId, raw);
+    if (hasWalletAdminPermission(quick, config.adminIds)) return true;
+    const identity = await this.senderIdentity(message.groupId, raw);
+    let admins = await this.groupAdminIds(message.groupId);
+    if (!hasWalletAdminPermission(identity, config.adminIds, admins))
+      admins = await this.groupAdminIds(message.groupId, true);
+    const allowed = hasWalletAdminPermission(identity, config.adminIds, admins);
+    const stored = repository.member(message.groupId, message.senderId);
+    if (stored && (stored.role === "admin") !== allowed && admins.size)
+      repository.setMemberRole(
+        message.groupId,
+        message.senderId,
+        allowed ? "admin" : "member",
+      );
+    if (!allowed)
+      console.warn(
+        `[admin] Từ chối ${message.senderName}: ID [${[...identity].join(", ")}] ` +
+          `không thuộc trưởng/phó nhóm [${[...admins].join(", ")}] hoặc ZALO_ADMIN_IDS`,
+      );
+    return allowed;
+  }
+  /** Canonical member ID for a typed Zalo ID, or "" when it is not in the group. */
+  async findGroupMember(groupId: string, zaloId: string): Promise<string> {
+    const known = () => {
+      const id = repository.resolveMemberId(groupId, [zaloId]);
+      return repository.member(groupId, id) ? id : "";
+    };
+    const direct = known();
+    if (direct) return direct;
+    const info = await this.groupInfo(groupId).catch(() => null);
+    if (info && extractGroupMemberIds(info).includes(zaloId)) {
+      await this.saveObservedMember(groupId, info, [zaloId]).catch(() => undefined);
+      return known() || zaloId;
+    }
+    await this.refreshGroup(groupId).catch(() => undefined);
+    return known();
+  }
+  async refreshGroup(groupId: string): Promise<MemberSyncReport> {
     const info = await this.groupInfo(groupId);
     if (!info) throw new Error("Không tìm thấy nhóm");
     repository.upsertGroup(groupId, info.name, info.totalMember);
     return this.saveMembers(groupId, info);
   }
-  private async saveMembers(groupId: string, info: any) {
+  private async refreshEnabledGroups() {
+    for (const group of repository.groups().filter((item) => item.enabled)) {
+      if (!this.api) return;
+      await this.refreshGroup(group.id).catch((error) =>
+        console.warn(`[members] Không làm mới được nhóm ${group.id}: ${errorMessage(error)}`),
+      );
+    }
+  }
+  private async historySenderIds(groupId: string): Promise<string[]> {
+    if (typeof this.api?.getGroupChatHistory !== "function") return [];
+    const history = await this.api.getGroupChatHistory(groupId, 50);
+    const ids = new Set<string>();
+    for (const message of history?.groupMsgs ?? []) {
+      const id = usableId(message?.data?.uidFrom);
+      if (id) ids.add(id);
+    }
+    return [...ids];
+  }
+  private async saveMembers(groupId: string, info: any): Promise<MemberSyncReport> {
     if (!this.api) throw new Error("Zalo chưa kết nối");
-    const total = Number(info?.totalMember ?? 0);
-    const needAllMemberPages = extractGroupMemberIds(info).length < total;
-    const linked = await fetchLinkedGroupSnapshot(
+    const warnings: string[] = [];
+    const infoIds = extractGroupMemberIds(info);
+    let total = Number(info?.totalMember ?? 0);
+
+    const linked: LinkedGroupSnapshot = await this.linkedSnapshot(
       groupId,
-      this.api,
-      needAllMemberPages,
-    ).catch(() => ({
-      members: [],
-      creatorId: "",
-      adminIds: [],
-      admins: [],
-      totalMember: 0,
-    }));
+      infoIds.length < total,
+    );
+    if (linked.error) warnings.push(`Link nhóm: ${linked.error}`);
+    else if (!linked.linkEnabled && infoIds.length < total)
+      warnings.push("Link tham gia nhóm đang tắt hoặc Zalo không trả link.");
+    total = Math.max(total, linked.totalMember);
+
+    let historyIds: string[] = [];
+    const known = new Set([...infoIds, ...extractGroupMemberIds(linked)]);
+    if (known.size < total)
+      historyIds = await this.historySenderIds(groupId).catch((error) => {
+        warnings.push(`Lịch sử chat: ${errorMessage(error)}`);
+        return [] as string[];
+      });
+
     const workingInfo = {
       ...info,
+      creatorId: info?.creatorId || linked.creatorId,
       adminIds: [
         ...(Array.isArray(info?.adminIds) ? info.adminIds : []),
         linked.creatorId,
@@ -304,6 +456,10 @@ class ZaloClient extends EventEmitter {
         ...(Array.isArray(info?.admins) ? info.admins : []),
         ...linked.admins,
       ],
+      memberIds: [
+        ...(Array.isArray(info?.memberIds) ? info.memberIds : []),
+        ...historyIds,
+      ],
       currentMems: [
         ...(Array.isArray(info?.currentMems) ? info.currentMems : []),
         ...linked.members,
@@ -311,12 +467,13 @@ class ZaloClient extends EventEmitter {
     };
     const uniqueIds = extractGroupMemberIds(workingInfo);
     const profiles = await fetchGroupMemberProfiles(
-      uniqueIds,
+      uniqueIds.filter(isNumericZaloId),
       (batch) => this.api!.getGroupMembersInfo(batch),
-    );
+    ).catch((error) => {
+      warnings.push(`Hồ sơ thành viên: ${errorMessage(error)}`);
+      return [] as any[];
+    });
     const normalized = normalizeGroupMembers(workingInfo, profiles);
-    if (!normalized.members.length && uniqueIds.length)
-      throw new Error("Zalo không trả về hồ sơ thành viên của nhóm");
     const partial = total > normalized.members.length;
     if (normalized.members.length) {
       if (partial) {
@@ -330,7 +487,39 @@ class ZaloClient extends EventEmitter {
         );
       }
     }
-    return { synced: normalized.members.length, total, partial };
+    const adminMemberIds = new Set(
+      normalized.members.filter((m) => m.role === "admin").map((m) => m.id),
+    );
+    this.adminCache.set(groupId, {
+      at: Date.now(),
+      ids: new Set([
+        ...extractGroupAdminIds(workingInfo),
+        ...normalized.aliases
+          .filter((alias) => adminMemberIds.has(alias.zaloId))
+          .map((alias) => alias.aliasId),
+      ]),
+    });
+    const report: MemberSyncReport = {
+      synced: normalized.members.length,
+      total,
+      partial,
+      sources: {
+        groupInfo: infoIds.length,
+        link: linked.members.length,
+        linkEnabled: linked.linkEnabled,
+        linkPages: linked.pages,
+        history: historyIds.length,
+      },
+      warnings,
+    };
+    const line =
+      `[members] ${groupId}: ${report.synced}/${total} | getGroupInfo(${describeGroupInfo(info)}) ` +
+      `| link(enabled=${linked.linkEnabled} pages=${linked.pages} members=${linked.members.length} ` +
+      `admins=${linked.adminIds.length} total=${linked.totalMember}) | history=${historyIds.length}` +
+      (warnings.length ? ` | ${warnings.join("; ")}` : "");
+    if (partial) console.warn(line);
+    else console.log(line);
+    return report;
   }
   private async saveObservedMember(
     groupId: string,
@@ -341,19 +530,19 @@ class ZaloClient extends EventEmitter {
     const ids = [...new Set(candidateIds.filter(Boolean))];
     if (!ids.length) return;
     const profiles = await fetchGroupMemberProfiles(
-      ids,
+      ids.filter(isNumericZaloId),
       (batch) => this.api!.getGroupMembersInfo(batch),
     );
-    const normalized = normalizeGroupMembers(
-      {
-        ...groupInfo,
-        memberIds: ids,
-        memVerList: [],
-        currentMems: [],
-      },
-      profiles,
-    );
+    const normalized = normalizeGroupMembers({ memberIds: ids }, profiles);
     if (!normalized.members.length) return;
+    const adminIds = new Set(extractGroupAdminIds(groupInfo));
+    for (const member of normalized.members)
+      if (
+        normalized.aliases.some(
+          (alias) => alias.zaloId === member.id && adminIds.has(alias.aliasId),
+        )
+      )
+        member.role = "admin";
     repository.upsertMembers(groupId, normalized.members);
     repository.upsertMemberAliases(groupId, normalized.aliases);
   }
@@ -409,3 +598,11 @@ function withTimeout<T>(
   });
 }
 export const zaloClient = new ZaloClient();
+
+function errorMessage(error: unknown) {
+  if (error instanceof Error) {
+    const code = (error as { code?: unknown }).code;
+    return code === undefined ? error.message : `${error.message} (code ${String(code)})`;
+  }
+  return String(error);
+}

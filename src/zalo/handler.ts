@@ -32,7 +32,12 @@ async function processMessage(message: IncomingGroupMessage, question: string) {
   try {
     const walletResponse = message.imageUrl
       ? null
-      : handleWalletCommand(message, question, zaloClient.ownId);
+      : await handleWalletCommand(message, question, {
+          botIds: zaloClient.botIds(message.groupId),
+          isAdmin: (msg) => zaloClient.isGroupAdmin(msg),
+          findMember: (groupId, zaloId) =>
+            zaloClient.findGroupMember(groupId, zaloId),
+        });
     if (walletResponse) {
       await zaloClient.send(message.groupId, walletResponse, message.raw);
       return;

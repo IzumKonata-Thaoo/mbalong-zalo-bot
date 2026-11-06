@@ -69,6 +69,30 @@ CREATE TABLE IF NOT EXISTS wallets (
 );
 `);
 
+/**
+ * Older builds stored wallets under an alphanumeric globalId. When an alias
+ * now points to a different canonical UID, move that balance onto the
+ * canonical wallet so nobody loses money after a member re-sync.
+ * Must be called inside a transaction.
+ */
+function mergeAliasWallets(aliases: Array<{aliasId:string;zaloId:string}>) {
+  const read = db.prepare("SELECT balance FROM wallets WHERE zalo_id=?");
+  const upsert = db.prepare(`INSERT INTO wallets(zalo_id,balance,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(zalo_id) DO UPDATE SET balance=excluded.balance,updated_at=CURRENT_TIMESTAMP`);
+  const remove = db.prepare("DELETE FROM wallets WHERE zalo_id=?");
+  const log = db.prepare("INSERT INTO audit_logs(actor_id,action,target,detail) VALUES(?,?,?,?)");
+  for (const { aliasId, zaloId } of aliases) {
+    if (!aliasId || !zaloId || aliasId === zaloId) continue;
+    const from = read.get(aliasId) as {balance:string}|undefined;
+    if (!from) continue;
+    const to = read.get(zaloId) as {balance:string}|undefined;
+    const merged = BigInt(to?.balance ?? "0") + BigInt(from.balance);
+    upsert.run(zaloId, merged.toString());
+    remove.run(aliasId);
+    log.run("system", "wallet.merge_alias", zaloId, JSON.stringify({ from: aliasId, moved: from.balance, balanceAfter: merged.toString() }));
+  }
+}
+
 export const repository = {
   upsertGroup(id: string, name: string, memberCount = 0) {
     db.prepare(`INSERT INTO groups(id,name,member_count,last_seen_at) VALUES(?,?,?,CURRENT_TIMESTAMP)
@@ -102,7 +126,7 @@ export const repository = {
   },
   upsertMembers(groupId: string, members: Array<{id:string;name:string;avatar?:string;role?:string}>) {
     const stmt = db.prepare(`INSERT INTO members(group_id,zalo_id,display_name,avatar,role) VALUES(?,?,?,?,?)
-      ON CONFLICT(group_id,zalo_id) DO UPDATE SET display_name=excluded.display_name,avatar=excluded.avatar,role=excluded.role,updated_at=CURRENT_TIMESTAMP`);
+      ON CONFLICT(group_id,zalo_id) DO UPDATE SET display_name=CASE WHEN excluded.display_name LIKE 'Zalo %' THEN members.display_name ELSE excluded.display_name END,avatar=COALESCE(excluded.avatar,members.avatar),role=excluded.role,updated_at=CURRENT_TIMESTAMP`);
     db.transaction(() => members.forEach((m) => stmt.run(groupId,m.id,m.name,m.avatar ?? null,m.role ?? "member")))();
     db.prepare("UPDATE groups SET member_count=MAX(member_count,?) WHERE id=?").run(members.length,groupId);
   },
@@ -119,6 +143,7 @@ export const repository = {
       db.prepare("DELETE FROM members WHERE group_id=?").run(groupId);
       members.forEach((m) => memberStmt.run(groupId,m.id,m.name,m.avatar ?? null,m.role ?? "member"));
       aliases.forEach((a) => aliasStmt.run(groupId,a.aliasId,a.zaloId));
+      mergeAliasWallets(aliases);
       db.prepare("UPDATE groups SET member_count=? WHERE id=?").run(members.length,groupId);
     })();
   },
@@ -126,10 +151,32 @@ export const repository = {
     const stmt = db.prepare(`INSERT INTO member_aliases(group_id,alias_id,zalo_id) VALUES(?,?,?)
       ON CONFLICT(group_id,alias_id) DO UPDATE SET zalo_id=excluded.zalo_id`);
     const removeStaleMember = db.prepare("DELETE FROM members WHERE group_id=? AND zalo_id=?");
-    db.transaction(() => aliases.forEach((a) => {
-      stmt.run(groupId,a.aliasId,a.zaloId);
-      if (a.aliasId !== a.zaloId) removeStaleMember.run(groupId,a.aliasId);
-    }))();
+    const repointAliases = db.prepare("UPDATE member_aliases SET zalo_id=? WHERE group_id=? AND zalo_id=?");
+    db.transaction(() => {
+      aliases.forEach((a) => {
+        stmt.run(groupId,a.aliasId,a.zaloId);
+        if (a.aliasId !== a.zaloId) {
+          removeStaleMember.run(groupId,a.aliasId);
+          repointAliases.run(a.zaloId,groupId,a.aliasId);
+        }
+      });
+      mergeAliasWallets(aliases);
+    })();
+  },
+  /** Raw IDs plus the canonical member ID and every alias of it. */
+  identityIds(groupId:string, candidates:Array<string|undefined|null>) {
+    const ids = new Set(candidates.map((value) => String(value ?? "").trim()).filter(Boolean));
+    const aliasQuery = db.prepare("SELECT alias_id FROM member_aliases WHERE group_id=? AND zalo_id=?");
+    for (const id of [...ids]) {
+      const canonical = repository.resolveMemberId(groupId,[id]);
+      if (!canonical) continue;
+      ids.add(canonical);
+      for (const row of aliasQuery.all(groupId,canonical) as Array<{alias_id:string}>) ids.add(row.alias_id);
+    }
+    return ids;
+  },
+  setMemberRole(groupId:string, zaloId:string, role:"admin"|"member") {
+    db.prepare("UPDATE members SET role=?,updated_at=CURRENT_TIMESTAMP WHERE group_id=? AND zalo_id=?").run(role,groupId,zaloId);
   },
   resolveMemberId(groupId:string, candidates:Array<string|undefined|null>) {
     const aliasQuery = db.prepare("SELECT zalo_id FROM member_aliases WHERE group_id=? AND alias_id=?");

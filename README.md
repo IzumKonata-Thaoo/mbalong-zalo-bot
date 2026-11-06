@@ -153,6 +153,18 @@ DeepSeek dùng định dạng `OpenAI-compatible`. Trong web admin, bấm **Đi�
 
 Ba xúc xắc giống nhau là bộ ba và nhà cái thắng. Các lượt của cùng một người được giữ đúng thứ tự trong từng luồng; nhiều thành viên trong nhóm vẫn được xử lý độc lập.
 
+## Cập nhật VPS chạy bằng screen
+
+Bot đang chạy ở `~/zl` trong screen `zl`: một lệnh tải bản mới, sao lưu rồi giữ nguyên `.env` và `data/` (session Zalo, database, ví), build lại và chạy lại trong screen.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/IzumKonata-Thaoo/mbalong-zalo-bot/main/deploy/update-vps.sh | bash
+```
+
+Thư mục hoặc tên screen khác: `... | BOT_DIR=~/bot SCREEN_NAME=bot bash`.
+
+Quyền `/nap` và `/tru` được kiểm tra trực tiếp với Zalo (trưởng nhóm, phó nhóm qua `getGroupInfo` và link nhóm) hoặc `ZALO_ADMIN_IDS`, không phụ thuộc danh sách thành viên đã đồng bộ đủ hay chưa. Log `[members]` và `[admin]` trong screen cho biết từng nguồn trả về bao nhiêu ID.
+
 ## Chạy nền bằng systemd
 
 Đăng nhập QR bằng `npm start` thủ công ít nhất một lần. Sau khi session đã lưu:

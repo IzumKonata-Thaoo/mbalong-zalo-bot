@@ -23,6 +23,8 @@ export interface GroupRecord {
 export interface IncomingGroupMessage {
   groupId: string;
   senderId: string;
+  /** Every raw sender ID Zalo attached to the message (uidFrom, userId…). */
+  senderIds: string[];
   senderName: string;
   content: string;
   messageId: string;

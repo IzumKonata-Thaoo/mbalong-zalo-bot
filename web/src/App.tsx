@@ -530,15 +530,30 @@ function GroupDetail() {
                       synced: number;
                       total: number;
                       partial: boolean;
+                      sources?: {
+                        groupInfo: number;
+                        link: number;
+                        linkEnabled: boolean;
+                        linkPages: number;
+                        history: number;
+                      };
+                      warnings?: string[];
                     }>(
                       `/groups/${id}/refresh`,
                       { method: "POST" },
                     );
                     await load();
+                    const s = result.sources;
+                    const detail = s
+                      ? ` Nguồn: thông tin nhóm ${s.groupInfo}, link nhóm ${s.linkEnabled ? `${s.link} (${s.linkPages} trang)` : "tắt"}, lịch sử chat ${s.history}.`
+                      : "";
+                    const warn = result.warnings?.length
+                      ? ` Cảnh báo: ${result.warnings.join("; ")}`
+                      : "";
                     setRefreshStatus(
                       result.partial
-                        ? `Chỉ lấy được ${result.synced}/${result.total} thành viên. Hãy bật link tham gia nhóm hoặc cấp quyền quản trị cho tài khoản bot.`
-                        : `Đã đồng bộ ${result.count} thành viên.`,
+                        ? `Chỉ lấy được ${result.synced}/${result.total} thành viên.${detail}${warn} Lệnh /nap vẫn kiểm tra trưởng/phó nhóm trực tiếp từ Zalo; thành viên còn thiếu sẽ tự được thêm khi họ nhắn trong nhóm.`
+                        : `Đã đồng bộ ${result.count} thành viên.${detail}`,
                     );
                   } catch (e) {
                     setRefreshStatus((e as Error).message);

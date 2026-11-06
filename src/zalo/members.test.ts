@@ -73,14 +73,14 @@ describe("Zalo group member normalization", () => {
     expect(calls).toContainEqual(["999"]);
   });
 
-  it("preserves the response-map UID and maps the group owner to one canonical admin", async () => {
+  it("keeps the numeric member-list UID canonical and the profile IDs as aliases", async () => {
     const profiles = await fetchGroupMemberProfiles(
       ["2525621723502069144"],
       async () => ({
         profiles: {
           "2525621723502069144": {
             id: "different-profile-id",
-            globalId: "118908036120340262",
+            globalId: "NOUL6BL3CKBPJ8DQVPBVJ4U70LQJQV00",
             displayName: "Long",
           },
         },
@@ -97,48 +97,68 @@ describe("Zalo group member normalization", () => {
     );
 
     expect(result.members).toEqual([
-      {
-        id: "118908036120340262",
-        name: "Long",
-        avatar: undefined,
-        role: "admin",
-      },
+      { id: "2525621723502069144", name: "Long", avatar: undefined, role: "admin" },
     ]);
-    expect(result.aliases).toContainEqual({
-      aliasId: "2525621723502069144",
-      zaloId: "118908036120340262",
-    });
+    expect(result.aliases).toEqual(expect.arrayContaining([
+      { aliasId: "2525621723502069144", zaloId: "2525621723502069144" },
+      { aliasId: "different-profile-id", zaloId: "2525621723502069144" },
+      { aliasId: "NOUL6BL3CKBPJ8DQVPBVJ4U70LQJQV00", zaloId: "2525621723502069144" },
+    ]));
   });
 
-  it("uses globalId as the canonical UID and keeps the group-scoped ID as an alias", () => {
+  it("merges a link member listed by globalId with the numeric UID from getGroupInfo", () => {
     const result = normalizeGroupMembers(
       {
-        memberIds: ["2525621723502069144"],
-        adminIds: ["2525621723502069144"],
-        currentMems: [
-          { id: "2525621723502069144", dName: "Long" },
-        ],
+        memVerList: ["2525621723502069144_3", "3333333333333333333_0"],
+        adminIds: ["NOUL6BL3CKBPJ8DQVPBVJ4U70LQJQV00"],
+        currentMems: [{ id: "NOUL6BL3CKBPJ8DQVPBVJ4U70LQJQV00", dName: "Hạ My" }],
       },
       [
-        {
-          id: "2525621723502069144",
-          globalId: "118908036120340262",
-          displayName: "Long",
-        },
+        { __lookupId: "2525621723502069144", id: "2525621723502069144", globalId: "NOUL6BL3CKBPJ8DQVPBVJ4U70LQJQV00", displayName: "Hạ My" },
+        { __lookupId: "3333333333333333333", id: "3333333333333333333", displayName: "Tú" },
       ],
     );
-
     expect(result.members).toEqual([
-      {
-        id: "118908036120340262",
-        name: "Long",
-        avatar: undefined,
-        role: "admin",
+      { id: "2525621723502069144", name: "Hạ My", avatar: undefined, role: "admin" },
+      { id: "3333333333333333333", name: "Tú", avatar: undefined, role: "member" },
+    ]);
+  });
+
+  it("counts the owner and deputies as members even when the member list is empty", () => {
+    expect(
+      extractGroupMemberIds({
+        memberIds: [],
+        memVerList: [],
+        currentMems: [],
+        creatorId: "1000000001",
+        adminIds: ["1000000002"],
+      }),
+    ).toEqual(["1000000001", "1000000002"]);
+  });
+
+  it("treats a link that reports enabled as true/\"1\" as enabled", async () => {
+    const snapshot = await fetchLinkedGroupSnapshot("group-1", {
+      getGroupLinkDetail: async () => ({ enabled: "1", link: "join-link" }),
+      getGroupLinkInfo: async () => ({
+        creatorId: "1000000001",
+        currentMems: [{ id: "1000000001" }],
+        hasMoreMember: 0,
+        totalMember: 1,
+      }),
+    });
+    expect(snapshot.linkEnabled).toBe(true);
+    expect(snapshot.creatorId).toBe("1000000001");
+  });
+
+  it("keeps earlier link pages when a later page fails", async () => {
+    const snapshot = await fetchLinkedGroupSnapshot("group-1", {
+      getGroupLinkDetail: async () => ({ enabled: 1, link: "join-link" }),
+      getGroupLinkInfo: async ({ memberPage }) => {
+        if (memberPage === 2) throw new Error("boom");
+        return { currentMems: [{ id: "1000000001" }], hasMoreMember: 1, totalMember: 5 };
       },
-    ]);
-    expect(result.aliases).toEqual([
-      { aliasId: "2525621723502069144", zaloId: "118908036120340262" },
-      { aliasId: "118908036120340262", zaloId: "118908036120340262" },
-    ]);
+    });
+    expect(snapshot.members).toHaveLength(1);
+    expect(snapshot.error).toContain("boom");
   });
 });
