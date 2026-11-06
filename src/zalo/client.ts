@@ -11,6 +11,7 @@ import { hasExactMention, stripExactMention } from "./policy.js";
 import { extractZaloPhoto } from "./media.js";
 import { withM4aPreview } from "../music/audio.js";
 import { buildGroupVoicePayload } from "./voice.js";
+import { normalizeZaloQuote } from "./quote.js";
 
 type ZaloApi = any;
 
@@ -158,13 +159,12 @@ class ZaloClient extends EventEmitter {
   async send(groupId: string, text: string, quote?: unknown) {
     if (!this.api) throw new Error("Zalo chưa kết nối");
     const chunks = splitMessage(text, 1800);
+    const normalizedQuote = normalizeZaloQuote(quote);
     for (let i = 0; i < chunks.length; i++)
       await this.api.sendMessage(
         {
           msg: chunks[i],
-          ...(i === 0 && quote
-            ? { quote: (quote as any).data ?? quote }
-            : {}),
+          ...(i === 0 && normalizedQuote ? { quote: normalizedQuote } : {}),
         },
         groupId,
         ThreadType.Group,

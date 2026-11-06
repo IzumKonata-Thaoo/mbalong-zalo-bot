@@ -65,13 +65,21 @@ async function processMessage(message: IncomingGroupMessage, question: string) {
       throw error;
     }
     if (musicResponse) {
-      await zaloClient.send(
-        message.groupId,
-        musicResponse.message,
+      const preferredQuote =
         musicResponse.replyToList && message.quoted
           ? message.quoted
-          : message.raw,
-      );
+          : message.raw;
+      try {
+        await zaloClient.send(
+          message.groupId,
+          musicResponse.message,
+          preferredQuote,
+        );
+      } catch (error) {
+        if (preferredQuote === message.raw) throw error;
+        console.warn("Music list quote failed; retrying without list quote", error);
+        await zaloClient.send(message.groupId, musicResponse.message, message.raw);
+      }
       if (musicResponse.soundCloudTrackUrl)
         try {
           await zaloClient.sendVoiceFromStream(
