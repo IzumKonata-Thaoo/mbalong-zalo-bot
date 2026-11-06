@@ -138,7 +138,7 @@ export async function searchPublicSoundCloud(
       "--dump-single-json",
       `scsearch${count}:${safeQuery}`,
     ],
-    15_000,
+    25_000,
   );
   return parseYtDlpSearchJson(stdout, count);
 }

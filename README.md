@@ -124,7 +124,15 @@ Zalo UID có trong `ZALO_ADMIN_IDS` hoặc admin thật của group được c�
 
 ### Tìm và phát nhạc
 
-Bot nhận câu tự nhiên như `@MbaLong tìm nhạc Nơi này có anh trên SoundCloud`, rồi trả tối đa 6 kết quả. Thành viên reply đúng tin nhắn danh sách, tag bot và gửi `/chon 2` trong 10 phút để chọn bài. Bot dùng extractor SoundCloud công khai của `yt-dlp`, không cần tài khoản SoundCloud, Artist Pro, cookie, Client ID hoặc Client Secret. Bot chỉ xử lý track công khai và cắt tối đa 60 giây để gửi qua tin nhắn thoại Zalo; nếu nguồn chỉ cung cấp preview 30 giây thì bot không thể kéo dài thêm. Track private, DRM, giới hạn vùng hoặc yêu cầu đăng nhập sẽ bị bỏ qua hoặc báo không phát được.
+Tìm nhạc SoundCloud và tìm kiếm web là hai lệnh riêng:
+
+```text
+@MbaLong /music Nơi này có anh      ← tìm trên SoundCloud (/nhac, /sc cũng được)
+@MbaLong /chon 2                    ← phát bài số 2 trong danh sách
+@MbaLong /search giá vàng hôm nay   ← tìm web rồi AI trả lời kèm nguồn (/web, /timkiem)
+```
+
+Bot trả tối đa 6 kết quả. Trong 10 phút, bất kỳ ai trong nhóm cũng có thể `/chon` từ danh sách mới nhất, và chọn nhiều bài liên tiếp. Câu tự nhiên chỉ được hiểu là tìm nhạc khi có chữ SoundCloud (`tìm bài … trên soundcloud`); các câu khác đi vào AI. Bot dùng extractor SoundCloud công khai của `yt-dlp`, không cần tài khoản SoundCloud, Artist Pro, cookie, Client ID hoặc Client Secret. Bot chỉ xử lý track công khai và cắt tối đa 60 giây để gửi qua tin nhắn thoại Zalo; nếu nguồn chỉ cung cấp preview 30 giây thì bot không thể kéo dài thêm. Track private, DRM, giới hạn vùng hoặc yêu cầu đăng nhập sẽ bị bỏ qua hoặc báo không phát được.
 
 Đặt đường dẫn công cụ trong `.env` (thường không cần sửa):
 

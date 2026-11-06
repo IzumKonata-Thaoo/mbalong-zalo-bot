@@ -5,8 +5,10 @@ import { repository } from "../db.js";
 import {getAISettings} from "../settings.js";
 import type {ChatImage} from "../types.js";
 
-export async function answerGroup(groupId:string, senderName:string, question:string, images:ChatImage[] = []) {
-  const sources = shouldResearch(question) ? await research(question).catch(() => []) : [];
+export async function answerGroup(groupId:string, senderName:string, question:string, images:ChatImage[] = [], forceResearch = false) {
+  const sources = forceResearch
+    ? await research(question)
+    : shouldResearch(question) ? await research(question).catch(() => []) : [];
   return ai.generate(buildPrompt({senderName,question,summary:repository.summary(groupId)?.content,recent:repository.recentMessages(groupId,18),sources,customSystemPrompt:getAISettings().systemPrompt,images}));
 }
 

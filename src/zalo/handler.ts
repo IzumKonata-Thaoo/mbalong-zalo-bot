@@ -9,7 +9,7 @@ import { KeyedSerialQueue } from "../queue.js";
 import { downloadZaloImage } from "../ai/image.js";
 import { isClearContextCommand } from "../ai/context-command.js";
 import { handleMusic } from "../music/service.js";
-import { parseMusicIntent } from "../music/rules.js";
+import { parseMusicIntent, parseWebSearchCommand } from "../music/rules.js";
 import type { IncomingGroupMessage } from "../types.js";
 import { zaloClient } from "./client.js";
 
@@ -121,12 +121,40 @@ async function processMessage(message: IncomingGroupMessage, question: string) {
       return;
     }
 
-    const wantsSummary = /^\s*(hãy\s+)?(tóm tắt|tom tat|summary)\b/i.test(
-      question,
-    );
+    const webSearch = parseWebSearchCommand(question);
+    if (webSearch && !webSearch.query) {
+      await zaloClient.send(
+        message.groupId,
+        [
+          "🔎 TÌM KIẾM WEB",
+          "",
+          "• @MbaLong /search câu hỏi — tìm trên Internet rồi trả lời kèm nguồn",
+          "• @MbaLong /music tên bài hát — tìm nhạc trên SoundCloud",
+        ].join("\n"),
+        message.raw,
+      );
+      return;
+    }
+    if (webSearch && !config.SEARCH_API_KEY) {
+      await zaloClient.send(
+        message.groupId,
+        "Tìm kiếm web chưa được bật: admin cần đặt SEARCH_API_KEY trong .env rồi khởi động lại bot.",
+        message.raw,
+      );
+      return;
+    }
+    const aiQuestion = webSearch ? webSearch.query : question;
+    const wantsSummary =
+      !webSearch && /^\s*(hãy\s+)?(tóm tắt|tom tat|summary)\b/i.test(question);
     const response = wantsSummary
       ? `📝 TÓM TẮT CUỘC TRÒ CHUYỆN\n\n${await summarizeGroup(message.groupId)}`
-      : `✦ ${config.BOT_NAME}\n\n${await answerGroup(message.groupId, message.senderName, question, message.imageUrl ? [await downloadZaloImage(message.imageUrl)] : [])}`;
+      : `${webSearch ? "🔎" : "✦"} ${config.BOT_NAME}\n\n${await answerGroup(
+          message.groupId,
+          message.senderName,
+          aiQuestion,
+          message.imageUrl ? [await downloadZaloImage(message.imageUrl)] : [],
+          Boolean(webSearch),
+        )}`;
     repository.saveMessage(
       message.groupId,
       message.messageId,
@@ -151,7 +179,9 @@ async function processMessage(message: IncomingGroupMessage, question: string) {
       error instanceof Error &&
       /(ảnh|URL)/i.test(error.message)
         ? `MbaLong không đọc được ảnh: ${error.message}`
-        : null;
+        : error instanceof Error && /^Search API/.test(error.message)
+          ? `Không tìm kiếm web được lúc này (${error.message}). Thử lại sau hoặc admin kiểm tra SEARCH_API_KEY.`
+          : null;
     await zaloClient
       .send(
         message.groupId,
