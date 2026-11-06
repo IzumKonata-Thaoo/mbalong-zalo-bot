@@ -525,12 +525,21 @@ function GroupDetail() {
                   setRefreshing(true);
                   setRefreshStatus("");
                   try {
-                    const result = await api<{ count: number }>(
+                    const result = await api<{
+                      count: number;
+                      synced: number;
+                      total: number;
+                      partial: boolean;
+                    }>(
                       `/groups/${id}/refresh`,
                       { method: "POST" },
                     );
                     await load();
-                    setRefreshStatus(`Đã đồng bộ ${result.count} thành viên.`);
+                    setRefreshStatus(
+                      result.partial
+                        ? `Chỉ lấy được ${result.synced}/${result.total} thành viên. Hãy bật link tham gia nhóm hoặc cấp quyền quản trị cho tài khoản bot.`
+                        : `Đã đồng bộ ${result.count} thành viên.`,
+                    );
                   } catch (e) {
                     setRefreshStatus((e as Error).message);
                   } finally {

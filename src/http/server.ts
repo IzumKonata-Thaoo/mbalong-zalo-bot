@@ -110,8 +110,8 @@ export function createServer() {
   app.post("/api/groups/:id/refresh", async (req, res, next) => {
     try {
       const p = idSchema.parse(req.params);
-      await zaloClient.refreshGroup(p.id);
-      res.json({ ok: true, count: repository.members(p.id).length });
+      const result = await zaloClient.refreshGroup(p.id);
+      res.json({ ok: true, count: repository.members(p.id).length, ...result });
     } catch (e) {
       next(e);
     }

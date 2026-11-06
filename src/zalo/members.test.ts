@@ -2,10 +2,27 @@ import { describe, expect, it } from "vitest";
 import {
   extractGroupMemberIds,
   fetchGroupMemberProfiles,
+  fetchLinkedGroupMembers,
   normalizeGroupMembers,
 } from "./members.js";
 
 describe("Zalo group member normalization", () => {
+  it("loads every member page when group info only exposes one member", async () => {
+    const pages: number[] = [];
+    const members = await fetchLinkedGroupMembers("group-1", {
+      getGroupLinkDetail: async () => ({ enabled: 1, link: "join-link" }),
+      getGroupLinkInfo: async ({ memberPage }: { memberPage?: number }) => {
+        pages.push(memberPage ?? 1);
+        return memberPage === 1
+          ? { currentMems: [{ id: "111" }], hasMoreMember: 1, totalMember: 3 }
+          : { currentMems: [{ id: "222" }, { id: "333" }], hasMoreMember: 0, totalMember: 3 };
+      },
+    });
+
+    expect(members.map((member) => member.id)).toEqual(["111", "222", "333"]);
+    expect(pages).toEqual([1, 2]);
+  });
+
   it("reads member IDs from memVerList when memberIds and currentMems are empty", () => {
     expect(
       extractGroupMemberIds({

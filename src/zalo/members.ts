@@ -12,6 +12,40 @@ export interface MemberAlias {
 
 type GroupProfilesResponse = { profiles?: Record<string, any> };
 
+interface GroupLinkApi {
+  getGroupLinkDetail(groupId: string): Promise<{ enabled?: number; link?: string }>;
+  getGroupLinkInfo(payload: { link: string; memberPage?: number }): Promise<{
+    currentMems?: any[];
+    hasMoreMember?: number;
+    totalMember?: number;
+  }>;
+}
+
+export async function fetchLinkedGroupMembers(
+  groupId: string,
+  api: GroupLinkApi,
+): Promise<any[]> {
+  const detail = await api.getGroupLinkDetail(groupId);
+  if (detail?.enabled !== 1 || !detail.link) return [];
+
+  const members = new Map<string, any>();
+  for (let memberPage = 1; memberPage <= 100; memberPage++) {
+    const page = await api.getGroupLinkInfo({
+      link: detail.link,
+      memberPage,
+    });
+    const before = members.size;
+    for (const member of page?.currentMems ?? []) {
+      const id = usableId(member?.id);
+      if (id) members.set(id, member);
+    }
+    const total = Number(page?.totalMember ?? 0);
+    if (!page?.hasMoreMember || (total > 0 && members.size >= total)) break;
+    if (members.size === before) break;
+  }
+  return [...members.values()];
+}
+
 function isInvalidParameterError(error: unknown): boolean {
   return typeof error === "object" && error !== null &&
     "code" in error && Number((error as { code?: unknown }).code) === 114;

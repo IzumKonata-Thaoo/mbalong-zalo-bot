@@ -15,6 +15,7 @@ import { normalizeZaloQuote } from "./quote.js";
 import {
   extractGroupMemberIds,
   fetchGroupMemberProfiles,
+  fetchLinkedGroupMembers,
   normalizeGroupMembers,
 } from "./members.js";
 
@@ -261,25 +262,47 @@ class ZaloClient extends EventEmitter {
     const info = await this.groupInfo(groupId);
     if (!info) throw new Error("Không tìm thấy nhóm");
     repository.upsertGroup(groupId, info.name, info.totalMember);
-    await this.saveMembers(groupId, info);
-    return info;
+    return this.saveMembers(groupId, info);
   }
   private async saveMembers(groupId: string, info: any) {
     if (!this.api) throw new Error("Zalo chưa kết nối");
-    const uniqueIds = extractGroupMemberIds(info);
+    const total = Number(info?.totalMember ?? 0);
+    let workingInfo = info;
+    if (extractGroupMemberIds(info).length < total) {
+      const linkedMembers = await fetchLinkedGroupMembers(groupId, this.api)
+        .catch(() => []);
+      if (linkedMembers.length) {
+        workingInfo = {
+          ...info,
+          currentMems: [
+            ...(Array.isArray(info?.currentMems) ? info.currentMems : []),
+            ...linkedMembers,
+          ],
+        };
+      }
+    }
+    const uniqueIds = extractGroupMemberIds(workingInfo);
     const profiles = await fetchGroupMemberProfiles(
       uniqueIds,
       (batch) => this.api!.getGroupMembersInfo(batch),
     );
-    const normalized = normalizeGroupMembers(info, profiles);
+    const normalized = normalizeGroupMembers(workingInfo, profiles);
     if (!normalized.members.length && uniqueIds.length)
       throw new Error("Zalo không trả về hồ sơ thành viên của nhóm");
-    if (normalized.members.length)
-      repository.replaceMembers(
-        groupId,
-        normalized.members,
-        normalized.aliases,
-      );
+    const partial = total > normalized.members.length;
+    if (normalized.members.length) {
+      if (partial) {
+        repository.upsertMembers(groupId, normalized.members);
+        repository.upsertMemberAliases(groupId, normalized.aliases);
+      } else {
+        repository.replaceMembers(
+          groupId,
+          normalized.members,
+          normalized.aliases,
+        );
+      }
+    }
+    return { synced: normalized.members.length, total, partial };
   }
   async addMember(groupId: string, zaloId: string) {
     if (!this.api) throw new Error("Zalo chưa kết nối");

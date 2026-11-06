@@ -122,6 +122,11 @@ export const repository = {
       db.prepare("UPDATE groups SET member_count=? WHERE id=?").run(members.length,groupId);
     })();
   },
+  upsertMemberAliases(groupId:string, aliases:Array<{aliasId:string;zaloId:string}>) {
+    const stmt = db.prepare(`INSERT INTO member_aliases(group_id,alias_id,zalo_id) VALUES(?,?,?)
+      ON CONFLICT(group_id,alias_id) DO UPDATE SET zalo_id=excluded.zalo_id`);
+    db.transaction(() => aliases.forEach((a) => stmt.run(groupId,a.aliasId,a.zaloId)))();
+  },
   resolveMemberId(groupId:string, candidates:Array<string|undefined|null>) {
     const aliasQuery = db.prepare("SELECT zalo_id FROM member_aliases WHERE group_id=? AND alias_id=?");
     const memberQuery = db.prepare("SELECT zalo_id FROM members WHERE group_id=? AND zalo_id=?");
