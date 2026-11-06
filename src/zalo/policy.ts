@@ -1,5 +1,19 @@
 export interface MentionSpan { uid?: string; pos?: number; len?: number }
 
+export function findIdentityMentionUid(
+  mentions:MentionSpan[],
+  ownId:string,
+  resolve:(id:string)=>string=(id)=>id,
+) {
+  if(!ownId)return "";
+  const canonicalOwnId=resolve(ownId);
+  const match=mentions.find((mention)=>{
+    const uid=String(mention.uid??"");
+    return Boolean(uid)&&resolve(uid)===canonicalOwnId;
+  });
+  return String(match?.uid??"");
+}
+
 export function hasExactMention(mentions:MentionSpan[],ownId:string) {
   return Boolean(ownId)&&mentions.some((mention)=>String(mention.uid)===ownId);
 }

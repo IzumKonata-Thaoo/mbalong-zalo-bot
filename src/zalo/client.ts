@@ -7,7 +7,7 @@ import { LoginQRCallbackEventType, ThreadType, Zalo } from "zca-js";
 import { config } from "../config.js";
 import { repository } from "../db.js";
 import type { BotStatus, IncomingGroupMessage } from "../types.js";
-import { hasExactMention, stripExactMention } from "./policy.js";
+import { findIdentityMentionUid, stripExactMention } from "./policy.js";
 import { extractZaloPhoto } from "./media.js";
 import { withM4aPreview } from "../music/audio.js";
 import { buildGroupVoicePayload } from "./voice.js";
@@ -151,12 +151,7 @@ class ZaloClient extends EventEmitter {
             .catch(() => undefined);
         senderId = repository.resolveMemberId(groupId, senderCandidates);
       }
-      const mentions = Array.isArray(data.mentions)
-        ? data.mentions.map((mention: any) => ({
-            ...mention,
-            uid: repository.resolveMemberId(groupId, [mention?.uid]),
-          }))
-        : [];
+      const mentions = Array.isArray(data.mentions) ? data.mentions : [];
       const parsed: IncomingGroupMessage = {
         groupId,
         senderId,
@@ -181,10 +176,21 @@ class ZaloClient extends EventEmitter {
   }
 
   isMentioned(message: IncomingGroupMessage) {
-    return hasExactMention(message.mentions, this.ownId);
+    return Boolean(this.ownMentionUid(message));
   }
   stripOwnMention(message: IncomingGroupMessage) {
-    return stripExactMention(message.content, message.mentions, this.ownId);
+    return stripExactMention(
+      message.content,
+      message.mentions,
+      this.ownMentionUid(message),
+    );
+  }
+  private ownMentionUid(message: IncomingGroupMessage) {
+    return findIdentityMentionUid(
+      message.mentions,
+      this.ownId,
+      (id) => repository.resolveMemberId(message.groupId, [id]),
+    );
   }
   async send(groupId: string, text: string, quote?: unknown) {
     if (!this.api) throw new Error("Zalo chưa kết nối");
