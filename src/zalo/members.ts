@@ -10,6 +10,42 @@ export interface MemberAlias {
   zaloId: string;
 }
 
+type GroupProfilesResponse = { profiles?: Record<string, any> };
+
+function isInvalidParameterError(error: unknown): boolean {
+  return typeof error === "object" && error !== null &&
+    "code" in error && Number((error as { code?: unknown }).code) === 114;
+}
+
+export async function fetchGroupMemberProfiles(
+  memberIds: string[],
+  fetchProfiles: (ids: string[]) => Promise<GroupProfilesResponse>,
+  batchSize = 20,
+): Promise<any[]> {
+  const ids = [...new Set(memberIds.map((id) => id.trim()).filter(Boolean))];
+
+  const fetchResilient = async (batch: string[]): Promise<any[]> => {
+    if (!batch.length) return [];
+    try {
+      const result = await fetchProfiles(batch);
+      return Object.values(result?.profiles ?? {});
+    } catch (error) {
+      if (!isInvalidParameterError(error)) throw error;
+      if (batch.length === 1) return [];
+      const middle = Math.ceil(batch.length / 2);
+      return [
+        ...(await fetchResilient(batch.slice(0, middle))),
+        ...(await fetchResilient(batch.slice(middle))),
+      ];
+    }
+  };
+
+  const profiles: any[] = [];
+  for (let offset = 0; offset < ids.length; offset += batchSize)
+    profiles.push(...await fetchResilient(ids.slice(offset, offset + batchSize)));
+  return profiles;
+}
+
 function usableId(value: unknown): string {
   const id = String(value ?? "").trim();
   return id && id !== "0" && id !== "undefined" && id !== "null" ? id : "";

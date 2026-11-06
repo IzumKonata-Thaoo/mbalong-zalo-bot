@@ -12,7 +12,10 @@ import { extractZaloPhoto } from "./media.js";
 import { withM4aPreview } from "../music/audio.js";
 import { buildGroupVoicePayload } from "./voice.js";
 import { normalizeZaloQuote } from "./quote.js";
-import { normalizeGroupMembers } from "./members.js";
+import {
+  fetchGroupMemberProfiles,
+  normalizeGroupMembers,
+} from "./members.js";
 
 type ZaloApi = any;
 
@@ -269,13 +272,10 @@ class ZaloClient extends EventEmitter {
         : []),
     ].map((id) => String(id ?? "").trim()).filter(Boolean);
     const uniqueIds = [...new Set(ids)];
-    const profiles: any[] = [];
-    for (let offset = 0; offset < uniqueIds.length; offset += 50) {
-      const result = await this.api.getGroupMembersInfo(
-        uniqueIds.slice(offset, offset + 50),
-      );
-      profiles.push(...Object.values(result?.profiles ?? {}));
-    }
+    const profiles = await fetchGroupMemberProfiles(
+      uniqueIds,
+      (batch) => this.api!.getGroupMembersInfo(batch),
+    );
     const normalized = normalizeGroupMembers(info, profiles);
     if (!normalized.members.length && uniqueIds.length)
       throw new Error("Zalo không trả về hồ sơ thành viên của nhóm");

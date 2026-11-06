@@ -481,6 +481,8 @@ function GroupDetail() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [newId, setNewId] = useState("");
   const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshStatus, setRefreshStatus] = useState("");
   const load = useCallback(async () => {
     setMembers(await api(`/groups/${id}/members`));
     setGroups(await api("/groups"));
@@ -518,16 +520,30 @@ function GroupDetail() {
             action={
               <button
                 className="text-btn"
+                disabled={refreshing}
                 onClick={async () => {
-                  await api(`/groups/${id}/refresh`, { method: "POST" });
-                  load();
+                  setRefreshing(true);
+                  setRefreshStatus("");
+                  try {
+                    const result = await api<{ count: number }>(
+                      `/groups/${id}/refresh`,
+                      { method: "POST" },
+                    );
+                    await load();
+                    setRefreshStatus(`Đã đồng bộ ${result.count} thành viên.`);
+                  } catch (e) {
+                    setRefreshStatus((e as Error).message);
+                  } finally {
+                    setRefreshing(false);
+                  }
                 }}
               >
                 <RefreshCw />
-                Làm mới
+                {refreshing ? "Đang đồng bộ…" : "Làm mới"}
               </button>
             }
           />
+          {refreshStatus && <div className="hint">{refreshStatus}</div>}
           <div className="member-list">
             {members.map((m) => (
               <div key={m.zalo_id}>

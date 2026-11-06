@@ -111,7 +111,7 @@ export function createServer() {
     try {
       const p = idSchema.parse(req.params);
       await zaloClient.refreshGroup(p.id);
-      res.json({ ok: true });
+      res.json({ ok: true, count: repository.members(p.id).length });
     } catch (e) {
       next(e);
     }

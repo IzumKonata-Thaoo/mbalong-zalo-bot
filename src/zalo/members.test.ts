@@ -1,7 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { normalizeGroupMembers } from "./members.js";
+import {
+  fetchGroupMemberProfiles,
+  normalizeGroupMembers,
+} from "./members.js";
 
 describe("Zalo group member normalization", () => {
+  it("isolates a member that makes Zalo reject the whole profile batch with code 114", async () => {
+    const calls: string[][] = [];
+    const profiles = await fetchGroupMemberProfiles(
+      ["111", "999", "222"],
+      async (ids) => {
+        calls.push(ids);
+        if (ids.includes("999")) throw Object.assign(new Error("Tham số không hợp lệ"), { code: 114 });
+        return {
+          profiles: Object.fromEntries(
+            ids.map((id) => [id, { id, globalId: `global-${id}` }]),
+          ),
+        };
+      },
+    );
+
+    expect(profiles.map((profile) => profile.id)).toEqual(["111", "222"]);
+    expect(calls).toContainEqual(["999"]);
+  });
+
   it("uses globalId as the canonical UID and keeps the group-scoped ID as an alias", () => {
     const result = normalizeGroupMembers(
       {
