@@ -2,6 +2,7 @@ import { config } from "../config.js";
 import { repository } from "../db.js";
 import type { IncomingGroupMessage } from "../types.js";
 import { formatBetAmount } from "./tai-xiu-rules.js";
+import { hasWalletAdminPermission } from "./wallet-auth.js";
 import { parseWalletCommand } from "./wallet-rules.js";
 
 const adjustGuide =
@@ -22,8 +23,15 @@ export function handleWalletCommand(
     const balance = repository.walletBalance(message.senderId);
     return `💰 SỐ DƯ\n\n${message.senderName}: ${formatBetAmount(balance)}`;
   }
-  if (!config.adminIds.has(message.senderId))
-    return "Bạn không có quyền cộng hoặc trừ số dư.";
+  const senderMember = repository.member(message.groupId, message.senderId);
+  if (
+    !hasWalletAdminPermission(
+      message.senderId,
+      config.adminIds,
+      senderMember?.role,
+    )
+  )
+    return `Bạn không có quyền cộng hoặc trừ số dư.\n\nUID bot nhận: ${message.senderId}\nRole trong nhóm: ${senderMember?.role ?? "chưa đồng bộ"}\n\nHãy thêm đúng UID trên vào ZALO_ADMIN_IDS hoặc bấm “Làm mới” thành viên trong web admin.`;
   if (command.kind === "invalid") return `⚠️ Cú pháp chưa đúng.\n\n${adjustGuide}`;
 
   const mentionedTargets = [

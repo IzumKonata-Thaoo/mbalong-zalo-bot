@@ -67,7 +67,7 @@ export async function handleMusic(
     return { message: `Chỉ được chọn từ 1 đến ${session.tracks.length}.` };
   sessions.delete(key);
   return {
-    message: `🎵 ${track.title}\n${track.artist}\nĐoạn nghe thử 30 giây từ SoundCloud`,
+    message: `🎵 ${track.title}\n${track.artist}`,
     soundCloudTrackUrl: track.url,
     replyToList: true,
   };

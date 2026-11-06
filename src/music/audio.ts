@@ -47,7 +47,7 @@ function runFfmpeg(sourceUrl: string, outputPath: string): Promise<void> {
         "-i",
         sourceUrl,
         "-t",
-        "30",
+        "60",
         "-vn",
         "-c:a",
         "aac",

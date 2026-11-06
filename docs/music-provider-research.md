@@ -6,7 +6,7 @@ Research date: 2026-11-06.
 
 1. Search up to six public tracks through the maintained `yt-dlp` SoundCloud extractor (`scsearch6`).
 2. Keep the result list for the same group member for ten minutes.
-3. Prefer an extractor-labelled 30-second preview. If SoundCloud exposes only a normal public, non-premium playback rendition, cap that rendition to 30 seconds locally.
+3. Prefer an extractor-labelled preview. If SoundCloud exposes a normal public, non-premium playback rendition, cap that rendition to 60 seconds locally; sources limited to a 30-second preview remain 30 seconds.
 4. Convert HLS AAC to a temporary M4A/AAC file with `ffmpeg`.
 5. Upload the file through `zca-js`, pass the returned Zalo URL to `sendVoice`, then delete the temporary file.
 
@@ -33,7 +33,7 @@ The implemented credential-free route uses `yt-dlp` with these restrictions:
 3. Store the six canonical URLs server-side and accept only a numeric selection. Do not accept an arbitrary download URL from chat.
 4. Prefer a format whose `format_id` contains `preview`. This is grounded in the extractor source: it sets `is_preview` for SoundCloud `snipped` media and URLs containing `/preview/` or `/playlist/0/30/`, then appends `preview` to `format_id`. If no labelled preview exists, only a standard public format with non-premium quality is eligible; original `download` and premium formats are excluded.
 5. Never request private tracks, `secret_token` URLs, cookies, `.netrc`, username/password, OAuth tokens, DRM media, premium/HQ formats or original downloads.
-6. Pass the chosen public playback URL to `ffmpeg` with `-t 30`, transcode to AAC/M4A, enforce a small file limit, upload it for Zalo voice delivery, and delete it immediately. The local cap prevents forwarding a full track.
+6. Pass the chosen public playback URL to `ffmpeg` with `-t 60`, transcode to AAC/M4A, enforce a small file limit, upload it for Zalo voice delivery, and delete it immediately. The local cap prevents forwarding a full track.
 7. Keep conversion concurrency bounded, use short process/network timeouts, apply per-user queues, and pin a tested `yt-dlp` version. Add a health check because client-ID extraction can break without notice.
 
 This design deliberately refuses full public streams even if a tool exposes them. A track being publicly playable does not automatically grant permission to download or redistribute the whole recording.
@@ -41,7 +41,7 @@ This design deliberately refuses full public streams even if a tool exposes them
 ### Recommendation
 
 - Production/compliance-first: use official SoundCloud OAuth and review SoundCloud's current platform terms.
-- Credential-free implementation: use `yt-dlp` only with the public-search, format and 30-second restrictions above. Do not use `soundcloud-scraper`, `soundcloud.ts`, cookies or a full-download library.
+- Credential-free implementation: use `yt-dlp` only with the public-search, format and short-excerpt restrictions above. Do not use `soundcloud-scraper`, `soundcloud.ts`, cookies or a full-download library.
 - Spotify should remain metadata/link-only; its preview field is not a dependable or generally redistributable audio source.
 
 ## Primary sources

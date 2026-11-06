@@ -105,7 +105,7 @@ Các mức từ một triệu trở lên được hiển thị rút gọn, ví d
 @MbaLong /tx xỉu 500
 ```
 
-Chỉ Zalo UID có trong `ZALO_ADMIN_IDS` được cộng/trừ số dư. Không tag thêm ai thì lệnh áp dụng cho chính admin; muốn chỉnh thành viên khác, tag người đó hoặc nhập Zalo ID:
+Zalo UID có trong `ZALO_ADMIN_IDS` hoặc admin thật của group được cộng/trừ số dư. Không tag thêm ai thì lệnh áp dụng cho chính admin; muốn chỉnh thành viên khác, tag người đó hoặc nhập Zalo ID:
 
 ```text
 @MbaLong /nap 10000
@@ -116,7 +116,7 @@ Chỉ Zalo UID có trong `ZALO_ADMIN_IDS` được cộng/trừ số dư. Không
 
 ### Tìm và phát nhạc
 
-Bot nhận câu tự nhiên như `@MbaLong tìm nhạc Nơi này có anh trên SoundCloud`, rồi trả tối đa 6 kết quả. Thành viên reply đúng tin nhắn danh sách, tag bot và gửi `/chon 2` trong 10 phút để chọn bài. Bot dùng extractor SoundCloud công khai của `yt-dlp`, không cần tài khoản SoundCloud, Artist Pro, cookie, Client ID hoặc Client Secret. Bot chỉ xử lý track công khai và cắt tối đa 30 giây để gửi qua tin nhắn thoại Zalo; track private, DRM, giới hạn vùng hoặc yêu cầu đăng nhập sẽ bị bỏ qua hoặc báo không phát được.
+Bot nhận câu tự nhiên như `@MbaLong tìm nhạc Nơi này có anh trên SoundCloud`, rồi trả tối đa 6 kết quả. Thành viên reply đúng tin nhắn danh sách, tag bot và gửi `/chon 2` trong 10 phút để chọn bài. Bot dùng extractor SoundCloud công khai của `yt-dlp`, không cần tài khoản SoundCloud, Artist Pro, cookie, Client ID hoặc Client Secret. Bot chỉ xử lý track công khai và cắt tối đa 60 giây để gửi qua tin nhắn thoại Zalo; nếu nguồn chỉ cung cấp preview 30 giây thì bot không thể kéo dài thêm. Track private, DRM, giới hạn vùng hoặc yêu cầu đăng nhập sẽ bị bỏ qua hoặc báo không phát được.
 
 Đặt đường dẫn công cụ trong `.env` (thường không cần sửa):
 
