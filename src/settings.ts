@@ -19,7 +19,7 @@ const KEY = createHash("sha256").update(config.JWT_SECRET).digest();
 
 function encrypt(value: string) {
   const iv = randomBytes(12),
-    cipher = createCipheriv("aes-256-gcm", KEY, iv);
+    cipher = createCipheriv("aes-256-gcm", KEY, iv, { authTagLength: 16 });
   const encrypted = Buffer.concat([
     cipher.update(value, "utf8"),
     cipher.final(),
@@ -39,6 +39,7 @@ function decrypt(value: string) {
     "aes-256-gcm",
     KEY,
     Buffer.from(iv, "base64url"),
+    { authTagLength: 16 },
   );
   decipher.setAuthTag(Buffer.from(tag, "base64url"));
   return Buffer.concat([

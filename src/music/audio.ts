@@ -3,8 +3,9 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { config } from "../config.js";
+import { resolvePublicSoundCloudStream } from "./ytdlp.js";
 
-const ALLOWED_HOSTS = ["soundcloud.com", "sndcdn.com"];
+const ALLOWED_HOSTS = ["soundcloud.com", "soundcloud.cloud", "sndcdn.com"];
 const waiters: Array<() => void> = [];
 let activeConversions = 0;
 
@@ -85,7 +86,7 @@ function runFfmpeg(sourceUrl: string, outputPath: string): Promise<void> {
 }
 
 export async function withM4aPreview<T>(
-  sourceUrl: string,
+  trackUrl: string,
   callback: (path: string) => Promise<T>,
 ): Promise<T> {
   await acquireConversionSlot();
@@ -93,6 +94,7 @@ export async function withM4aPreview<T>(
   try {
     directory = await mkdtemp(join(tmpdir(), "mbalong-music-"));
     const output = join(directory, "preview.m4a");
+    const sourceUrl = await resolvePublicSoundCloudStream(trackUrl);
     await runFfmpeg(validateSource(sourceUrl), output);
     const info = await stat(output);
     if (info.size <= 0 || info.size > 8 * 1024 * 1024)

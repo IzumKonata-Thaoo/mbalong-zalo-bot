@@ -101,17 +101,26 @@ Các mức từ một triệu trở lên được hiển thị rút gọn, ví d
 
 ### Tìm và phát nhạc
 
-Bot nhận câu tự nhiên như `@MbaLong tìm nhạc Nơi này có anh trên SoundCloud`, rồi trả tối đa 6 kết quả. Thành viên tag bot và nói `chọn 2` trong 10 phút để chọn bài. SoundCloud được phát bằng preview chính thức 30 giây qua tin nhắn thoại Zalo.
+Bot nhận câu tự nhiên như `@MbaLong tìm nhạc Nơi này có anh trên SoundCloud`, rồi trả tối đa 6 kết quả. Thành viên tag bot và nói `chọn 2` trong 10 phút để chọn bài. Bot dùng extractor SoundCloud công khai của `yt-dlp`, không cần tài khoản SoundCloud, Artist Pro, cookie, Client ID hoặc Client Secret. Bot chỉ xử lý track công khai và cắt tối đa 30 giây để gửi qua tin nhắn thoại Zalo; track private, DRM, giới hạn vùng hoặc yêu cầu đăng nhập sẽ bị bỏ qua hoặc báo không phát được.
 
-Thêm credential server-side vào `.env`:
+Đặt đường dẫn công cụ trong `.env` (thường không cần sửa):
 
 ```env
-SOUNDCLOUD_CLIENT_ID=
-SOUNDCLOUD_CLIENT_SECRET=
+YTDLP_PATH=yt-dlp
 FFMPEG_PATH=ffmpeg
 ```
 
-Ubuntu cần `ffmpeg`: `sudo apt update && sudo apt install -y ffmpeg`.
+Ubuntu cần `ffmpeg` và bản `yt-dlp` mới. Cài bản phát hành chính thức:
+
+```bash
+sudo apt update && sudo apt install -y ffmpeg curl
+sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+  -o /usr/local/bin/yt-dlp
+sudo chmod a+rx /usr/local/bin/yt-dlp
+yt-dlp --version
+```
+
+Đây là tích hợp không chính thức và phụ thuộc giao diện công khai của SoundCloud, nên cần cập nhật `yt-dlp` nếu SoundCloud thay đổi hệ thống.
 
 Bot đọc được ảnh JPEG, PNG, WEBP và GIF trong nhóm. Thành viên gửi ảnh kèm caption có tag `@MbaLong`, hoặc trả lời một ảnh rồi tag bot, để mô tả ảnh, hỏi đáp hoặc giải bài; model được chọn trong trang admin phải hỗ trợ vision/multimodal.
 

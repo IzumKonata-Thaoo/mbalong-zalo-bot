@@ -26,7 +26,7 @@ async function processMessage(message: IncomingGroupMessage, question: string) {
     } catch (error) {
       if (
         error instanceof Error &&
-        /(SoundCloud|nhạc|music|credential|token)/i.test(error.message)
+        /(SoundCloud|nhạc|music|yt-dlp)/i.test(error.message)
       ) {
         await zaloClient.send(
           message.groupId,
@@ -43,11 +43,11 @@ async function processMessage(message: IncomingGroupMessage, question: string) {
         musicResponse.message,
         message.raw,
       );
-      if (musicResponse.audioSourceUrl)
+      if (musicResponse.soundCloudTrackUrl)
         try {
           await zaloClient.sendVoiceFromStream(
             message.groupId,
-            musicResponse.audioSourceUrl,
+            musicResponse.soundCloudTrackUrl,
           );
         } catch (error) {
           console.error("Music voice delivery error", error);

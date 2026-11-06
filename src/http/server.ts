@@ -167,9 +167,8 @@ export function createServer() {
       ai: publicAISettings(),
       searchEnabled: Boolean(config.SEARCH_API_KEY),
       music: {
-        soundCloud: Boolean(
-          config.SOUNDCLOUD_CLIENT_ID && config.SOUNDCLOUD_CLIENT_SECRET,
-        ),
+        soundCloud: true,
+        provider: "yt-dlp",
       },
       adminIds: [...config.adminIds],
       sessionPath: config.SESSION_PATH,

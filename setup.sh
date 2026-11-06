@@ -16,6 +16,12 @@ if (( node_major < 22 )); then
   exit 1
 fi
 
+for media_command in ffmpeg yt-dlp; do
+  if ! command -v "$media_command" >/dev/null 2>&1; then
+    echo "Cảnh báo: chưa có $media_command; tính năng gửi nhạc SoundCloud sẽ chưa hoạt động." >&2
+  fi
+done
+
 mkdir -p data
 chmod 700 data
 
@@ -31,8 +37,7 @@ JWT_SECRET=${jwt_secret}
 ZALO_ADMIN_IDS=
 SEARCH_API_URL=https://api.tavily.com/search
 SEARCH_API_KEY=
-SOUNDCLOUD_CLIENT_ID=
-SOUNDCLOUD_CLIENT_SECRET=
+YTDLP_PATH=yt-dlp
 FFMPEG_PATH=ffmpeg
 DATABASE_PATH=./data/bot.db
 SESSION_PATH=./data/zalo-session.json
