@@ -15,7 +15,7 @@ import { normalizeZaloQuote } from "./quote.js";
 import {
   extractGroupMemberIds,
   fetchGroupMemberProfiles,
-  fetchLinkedGroupMembers,
+  fetchLinkedGroupSnapshot,
   normalizeGroupMembers,
 } from "./members.js";
 
@@ -275,20 +275,34 @@ class ZaloClient extends EventEmitter {
   private async saveMembers(groupId: string, info: any) {
     if (!this.api) throw new Error("Zalo chưa kết nối");
     const total = Number(info?.totalMember ?? 0);
-    let workingInfo = info;
-    if (extractGroupMemberIds(info).length < total) {
-      const linkedMembers = await fetchLinkedGroupMembers(groupId, this.api)
-        .catch(() => []);
-      if (linkedMembers.length) {
-        workingInfo = {
-          ...info,
-          currentMems: [
-            ...(Array.isArray(info?.currentMems) ? info.currentMems : []),
-            ...linkedMembers,
-          ],
-        };
-      }
-    }
+    const needAllMemberPages = extractGroupMemberIds(info).length < total;
+    const linked = await fetchLinkedGroupSnapshot(
+      groupId,
+      this.api,
+      needAllMemberPages,
+    ).catch(() => ({
+      members: [],
+      creatorId: "",
+      adminIds: [],
+      admins: [],
+      totalMember: 0,
+    }));
+    const workingInfo = {
+      ...info,
+      adminIds: [
+        ...(Array.isArray(info?.adminIds) ? info.adminIds : []),
+        linked.creatorId,
+        ...linked.adminIds,
+      ].filter(Boolean),
+      admins: [
+        ...(Array.isArray(info?.admins) ? info.admins : []),
+        ...linked.admins,
+      ],
+      currentMems: [
+        ...(Array.isArray(info?.currentMems) ? info.currentMems : []),
+        ...linked.members,
+      ],
+    };
     const uniqueIds = extractGroupMemberIds(workingInfo);
     const profiles = await fetchGroupMemberProfiles(
       uniqueIds,

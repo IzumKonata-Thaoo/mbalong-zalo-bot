@@ -15,35 +15,78 @@ type GroupProfilesResponse = { profiles?: Record<string, any> };
 interface GroupLinkApi {
   getGroupLinkDetail(groupId: string): Promise<{ enabled?: number; link?: string }>;
   getGroupLinkInfo(payload: { link: string; memberPage?: number }): Promise<{
+    creatorId?: string;
+    adminIds?: string[];
+    admins?: any[];
     currentMems?: any[];
     hasMoreMember?: number;
     totalMember?: number;
   }>;
 }
 
-export async function fetchLinkedGroupMembers(
+export interface LinkedGroupSnapshot {
+  members: any[];
+  creatorId: string;
+  adminIds: string[];
+  admins: any[];
+  totalMember: number;
+}
+
+export async function fetchLinkedGroupSnapshot(
   groupId: string,
   api: GroupLinkApi,
-): Promise<any[]> {
+  allMemberPages = true,
+): Promise<LinkedGroupSnapshot> {
+  const empty: LinkedGroupSnapshot = {
+    members: [],
+    creatorId: "",
+    adminIds: [],
+    admins: [],
+    totalMember: 0,
+  };
   const detail = await api.getGroupLinkDetail(groupId);
-  if (detail?.enabled !== 1 || !detail.link) return [];
+  if (detail?.enabled !== 1 || !detail.link) return empty;
 
   const members = new Map<string, any>();
+  const adminIds = new Set<string>();
+  const admins: any[] = [];
+  let creatorId = "";
+  let totalMember = 0;
   for (let memberPage = 1; memberPage <= 100; memberPage++) {
     const page = await api.getGroupLinkInfo({
       link: detail.link,
       memberPage,
     });
+    creatorId ||= usableId(page?.creatorId);
+    for (const id of page?.adminIds ?? []) {
+      const normalized = usableId(id);
+      if (normalized) adminIds.add(normalized);
+    }
+    if (Array.isArray(page?.admins)) admins.push(...page.admins);
     const before = members.size;
     for (const member of page?.currentMems ?? []) {
       const id = usableId(member?.id);
       if (id) members.set(id, member);
     }
-    const total = Number(page?.totalMember ?? 0);
-    if (!page?.hasMoreMember || (total > 0 && members.size >= total)) break;
+    totalMember = Math.max(totalMember, Number(page?.totalMember ?? 0));
+    if (!allMemberPages || !page?.hasMoreMember ||
+      (totalMember > 0 && members.size >= totalMember)) break;
     if (members.size === before) break;
   }
-  return [...members.values()];
+  return {
+    members: [...members.values()],
+    creatorId,
+    adminIds: [...adminIds],
+    admins,
+    totalMember,
+  };
+}
+
+export async function fetchLinkedGroupMembers(
+  groupId: string,
+  api: GroupLinkApi,
+): Promise<any[]> {
+  return (await fetchLinkedGroupSnapshot(groupId, api, true)).members;
 }
 
 function isInvalidParameterError(error: unknown): boolean {

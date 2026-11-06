@@ -2,11 +2,32 @@ import { describe, expect, it } from "vitest";
 import {
   extractGroupMemberIds,
   fetchGroupMemberProfiles,
+  fetchLinkedGroupSnapshot,
   fetchLinkedGroupMembers,
   normalizeGroupMembers,
 } from "./members.js";
 
 describe("Zalo group member normalization", () => {
+  it("reads owner and deputy IDs from the independent group-link endpoint", async () => {
+    const snapshot = await fetchLinkedGroupSnapshot("group-1", {
+      getGroupLinkDetail: async () => ({ enabled: 1, link: "join-link" }),
+      getGroupLinkInfo: async () => ({
+        creatorId: "owner-from-link",
+        adminIds: ["deputy-from-link"],
+        admins: [{ id: "admin-object-from-link" }],
+        currentMems: [{ id: "owner-from-link" }],
+        hasMoreMember: 0,
+        totalMember: 1,
+      }),
+    }, false);
+
+    expect(snapshot).toMatchObject({
+      creatorId: "owner-from-link",
+      adminIds: ["deputy-from-link"],
+      members: [{ id: "owner-from-link" }],
+    });
+  });
+
   it("loads every member page when group info only exposes one member", async () => {
     const pages: number[] = [];
     const members = await fetchLinkedGroupMembers("group-1", {
