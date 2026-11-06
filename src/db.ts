@@ -104,7 +104,7 @@ export const repository = {
     const stmt = db.prepare(`INSERT INTO members(group_id,zalo_id,display_name,avatar,role) VALUES(?,?,?,?,?)
       ON CONFLICT(group_id,zalo_id) DO UPDATE SET display_name=excluded.display_name,avatar=excluded.avatar,role=excluded.role,updated_at=CURRENT_TIMESTAMP`);
     db.transaction(() => members.forEach((m) => stmt.run(groupId,m.id,m.name,m.avatar ?? null,m.role ?? "member")))();
-    db.prepare("UPDATE groups SET member_count=? WHERE id=?").run(members.length,groupId);
+    db.prepare("UPDATE groups SET member_count=MAX(member_count,?) WHERE id=?").run(members.length,groupId);
   },
   replaceMembers(
     groupId: string,
@@ -125,7 +125,11 @@ export const repository = {
   upsertMemberAliases(groupId:string, aliases:Array<{aliasId:string;zaloId:string}>) {
     const stmt = db.prepare(`INSERT INTO member_aliases(group_id,alias_id,zalo_id) VALUES(?,?,?)
       ON CONFLICT(group_id,alias_id) DO UPDATE SET zalo_id=excluded.zalo_id`);
-    db.transaction(() => aliases.forEach((a) => stmt.run(groupId,a.aliasId,a.zaloId)))();
+    const removeStaleMember = db.prepare("DELETE FROM members WHERE group_id=? AND zalo_id=?");
+    db.transaction(() => aliases.forEach((a) => {
+      stmt.run(groupId,a.aliasId,a.zaloId);
+      if (a.aliasId !== a.zaloId) removeStaleMember.run(groupId,a.aliasId);
+    }))();
   },
   resolveMemberId(groupId:string, candidates:Array<string|undefined|null>) {
     const aliasQuery = db.prepare("SELECT zalo_id FROM member_aliases WHERE group_id=? AND alias_id=?");
@@ -139,7 +143,7 @@ export const repository = {
     }
     return ids[0] ?? "";
   },
-  members(groupId: string) { return db.prepare("SELECT * FROM members WHERE group_id=? ORDER BY role DESC,display_name").all(groupId); },
+  members(groupId: string) { return db.prepare("SELECT * FROM members WHERE group_id=? ORDER BY CASE WHEN role='admin' THEN 0 ELSE 1 END,display_name").all(groupId); },
   member(groupId:string,zaloId:string) { return db.prepare("SELECT * FROM members WHERE group_id=? AND zalo_id=?").get(groupId,zaloId) as {zalo_id:string;display_name:string;role:string}|undefined; },
   walletBalance(zaloId:string) {
     const row=db.prepare("SELECT balance FROM wallets WHERE zalo_id=?").get(zaloId) as {balance:string}|undefined;

@@ -52,6 +52,43 @@ describe("Zalo group member normalization", () => {
     expect(calls).toContainEqual(["999"]);
   });
 
+  it("preserves the response-map UID and maps the group owner to one canonical admin", async () => {
+    const profiles = await fetchGroupMemberProfiles(
+      ["2525621723502069144"],
+      async () => ({
+        profiles: {
+          "2525621723502069144": {
+            id: "different-profile-id",
+            globalId: "118908036120340262",
+            displayName: "Long",
+          },
+        },
+      }),
+    );
+    const result = normalizeGroupMembers(
+      {
+        memberIds: ["2525621723502069144"],
+        creatorId: "2525621723502069144",
+        adminIds: [],
+        currentMems: [],
+      },
+      profiles,
+    );
+
+    expect(result.members).toEqual([
+      {
+        id: "118908036120340262",
+        name: "Long",
+        avatar: undefined,
+        role: "admin",
+      },
+    ]);
+    expect(result.aliases).toContainEqual({
+      aliasId: "2525621723502069144",
+      zaloId: "118908036120340262",
+    });
+  });
+
   it("uses globalId as the canonical UID and keeps the group-scoped ID as an alias", () => {
     const result = normalizeGroupMembers(
       {

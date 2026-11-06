@@ -62,7 +62,12 @@ export async function fetchGroupMemberProfiles(
     if (!batch.length) return [];
     try {
       const result = await fetchProfiles(batch);
-      return Object.values(result?.profiles ?? {});
+      return Object.entries(result?.profiles ?? {}).map(
+        ([lookupId, profile]) => ({
+          ...(profile && typeof profile === "object" ? profile : {}),
+          __lookupId: lookupId,
+        }),
+      );
     } catch (error) {
       if (!isInvalidParameterError(error)) throw error;
       if (batch.length === 1) return [];
@@ -106,17 +111,27 @@ export function normalizeGroupMembers(
   for (const profile of profiles) {
     const id = usableId(profile?.id);
     const globalId = usableId(profile?.globalId);
+    const lookupId = usableId(profile?.__lookupId);
     if (id) byId.set(id, profile);
     if (globalId) byId.set(globalId, profile);
+    if (lookupId) byId.set(lookupId, profile);
   }
 
   const rawIds = [
     ...extractGroupMemberIds(info),
     ...fetchedProfiles.map((profile: any) => profile?.id),
+    ...fetchedProfiles.map((profile: any) => profile?.__lookupId),
   ].map(usableId).filter(Boolean);
-  const adminIds = new Set(
-    (Array.isArray(info?.adminIds) ? info.adminIds : []).map(usableId),
-  );
+  const rawAdmins = Array.isArray(info?.admins) ? info.admins : [];
+  const adminIds = new Set([
+    info?.creatorId,
+    ...(Array.isArray(info?.adminIds) ? info.adminIds : []),
+    ...rawAdmins.flatMap((admin: any) =>
+      admin && typeof admin === "object"
+        ? [admin.id, admin.uid, admin.userId, admin.zaloId, admin.globalId]
+        : [admin]
+    ),
+  ].map(usableId).filter(Boolean));
   const memberById = new Map<string, StoredGroupMember>();
   const aliasById = new Map<string, MemberAlias>();
 
@@ -128,6 +143,7 @@ export function normalizeGroupMembers(
     const role = [localId, profileId, globalId].some(
       (id) => id && adminIds.has(id),
     ) ? "admin" : "member";
+    const existing = memberById.get(canonicalId);
     memberById.set(canonicalId, {
       id: canonicalId,
       name:
@@ -136,9 +152,14 @@ export function normalizeGroupMembers(
         profile?.zaloName ||
         `Zalo ${canonicalId}`,
       avatar: profile?.avatar,
-      role,
+      role: existing?.role === "admin" || role === "admin" ? "admin" : "member",
     });
-    for (const aliasId of [localId, profileId, globalId]) {
+    for (const aliasId of [
+      localId,
+      usableId(profile?.__lookupId),
+      profileId,
+      globalId,
+    ]) {
       if (aliasId)
         aliasById.set(aliasId, { aliasId, zaloId: canonicalId });
     }

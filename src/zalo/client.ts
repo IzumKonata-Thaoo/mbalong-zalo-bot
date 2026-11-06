@@ -137,12 +137,20 @@ class ZaloClient extends EventEmitter {
           this.lastError = `Không đồng bộ được thành viên nhóm ${groupId}: ${String(error)}`;
           console.warn(this.lastError);
         });
-      const senderId = repository.resolveMemberId(groupId, [
+      const senderCandidates = [
         data.uidFrom,
         data.userId,
         data.uin,
         data.senderId,
-      ]);
+      ].map((value) => String(value ?? "").trim()).filter(Boolean);
+      let senderId = repository.resolveMemberId(groupId, senderCandidates);
+      if (senderId && !repository.member(groupId, senderId)) {
+        const memberInfo = info ?? await this.groupInfo(groupId).catch(() => null);
+        if (memberInfo)
+          await this.saveObservedMember(groupId, memberInfo, senderCandidates)
+            .catch(() => undefined);
+        senderId = repository.resolveMemberId(groupId, senderCandidates);
+      }
       const mentions = Array.isArray(data.mentions)
         ? data.mentions.map((mention: any) => ({
             ...mention,
@@ -303,6 +311,31 @@ class ZaloClient extends EventEmitter {
       }
     }
     return { synced: normalized.members.length, total, partial };
+  }
+  private async saveObservedMember(
+    groupId: string,
+    groupInfo: any,
+    candidateIds: string[],
+  ) {
+    if (!this.api) return;
+    const ids = [...new Set(candidateIds.filter(Boolean))];
+    if (!ids.length) return;
+    const profiles = await fetchGroupMemberProfiles(
+      ids,
+      (batch) => this.api!.getGroupMembersInfo(batch),
+    );
+    const normalized = normalizeGroupMembers(
+      {
+        ...groupInfo,
+        memberIds: ids,
+        memVerList: [],
+        currentMems: [],
+      },
+      profiles,
+    );
+    if (!normalized.members.length) return;
+    repository.upsertMembers(groupId, normalized.members);
+    repository.upsertMemberAliases(groupId, normalized.aliases);
   }
   async addMember(groupId: string, zaloId: string) {
     if (!this.api) throw new Error("Zalo chưa kết nối");
