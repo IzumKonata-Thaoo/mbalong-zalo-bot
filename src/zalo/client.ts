@@ -13,6 +13,7 @@ import { withM4aPreview } from "../music/audio.js";
 import { buildGroupVoicePayload } from "./voice.js";
 import { normalizeZaloQuote } from "./quote.js";
 import {
+  extractGroupMemberIds,
   fetchGroupMemberProfiles,
   normalizeGroupMembers,
 } from "./members.js";
@@ -265,13 +266,7 @@ class ZaloClient extends EventEmitter {
   }
   private async saveMembers(groupId: string, info: any) {
     if (!this.api) throw new Error("Zalo chưa kết nối");
-    const ids = [
-      ...(Array.isArray(info?.memberIds) ? info.memberIds : []),
-      ...(Array.isArray(info?.currentMems)
-        ? info.currentMems.map((member: any) => member?.id)
-        : []),
-    ].map((id) => String(id ?? "").trim()).filter(Boolean);
-    const uniqueIds = [...new Set(ids)];
+    const uniqueIds = extractGroupMemberIds(info);
     const profiles = await fetchGroupMemberProfiles(
       uniqueIds,
       (batch) => this.api!.getGroupMembersInfo(batch),

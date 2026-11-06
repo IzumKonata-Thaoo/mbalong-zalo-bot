@@ -47,8 +47,19 @@ export async function fetchGroupMemberProfiles(
 }
 
 function usableId(value: unknown): string {
-  const id = String(value ?? "").trim();
+  const raw = String(value ?? "").trim();
+  const versioned = raw.match(/^(\d+)_\d+$/);
+  const id = versioned?.[1] ?? raw;
   return id && id !== "0" && id !== "undefined" && id !== "null" ? id : "";
+}
+
+export function extractGroupMemberIds(info: any): string[] {
+  const current = Array.isArray(info?.currentMems) ? info.currentMems : [];
+  return [...new Set([
+    ...(Array.isArray(info?.memberIds) ? info.memberIds : []),
+    ...(Array.isArray(info?.memVerList) ? info.memVerList : []),
+    ...current.map((member: any) => member?.id),
+  ].map(usableId).filter(Boolean))];
 }
 
 export function normalizeGroupMembers(
@@ -66,8 +77,7 @@ export function normalizeGroupMembers(
   }
 
   const rawIds = [
-    ...(Array.isArray(info?.memberIds) ? info.memberIds : []),
-    ...current.map((member: any) => member?.id),
+    ...extractGroupMemberIds(info),
     ...fetchedProfiles.map((profile: any) => profile?.id),
   ].map(usableId).filter(Boolean);
   const adminIds = new Set(

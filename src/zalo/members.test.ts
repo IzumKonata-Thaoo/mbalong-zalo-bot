@@ -1,10 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
+  extractGroupMemberIds,
   fetchGroupMemberProfiles,
   normalizeGroupMembers,
 } from "./members.js";
 
 describe("Zalo group member normalization", () => {
+  it("reads member IDs from memVerList when memberIds and currentMems are empty", () => {
+    expect(
+      extractGroupMemberIds({
+        memberIds: [],
+        currentMems: [],
+        memVerList: ["118908036120340262_0", "222_7"],
+      }),
+    ).toEqual(["118908036120340262", "222"]);
+  });
+
   it("isolates a member that makes Zalo reject the whole profile batch with code 114", async () => {
     const calls: string[][] = [];
     const profiles = await fetchGroupMemberProfiles(
