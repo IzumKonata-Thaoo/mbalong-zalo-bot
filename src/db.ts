@@ -70,6 +70,42 @@ CREATE TABLE IF NOT EXISTS wallets (
 `);
 
 /**
+ * v3 member identity: older builds trusted profile globalId/id, which Zalo can
+ * return identically for many members, so a whole group collapsed into one
+ * member (wrong name, admin role leaked) and wallets were merged across
+ * people. Drop the cached member list (it is re-synced from Zalo at login)
+ * and undo every alias wallet merge. Wallet balances themselves are kept.
+ */
+function migrateMemberIdentityV3() {
+  const done = db.prepare("SELECT value FROM settings WHERE key='member_identity_version'").get() as {value:string}|undefined;
+  if (Number(done?.value ?? 0) >= 3) return;
+  db.transaction(() => {
+    const read = db.prepare("SELECT balance FROM wallets WHERE zalo_id=?");
+    const write = db.prepare(`INSERT INTO wallets(zalo_id,balance,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)
+      ON CONFLICT(zalo_id) DO UPDATE SET balance=excluded.balance,updated_at=CURRENT_TIMESTAMP`);
+    const log = db.prepare("INSERT INTO audit_logs(actor_id,action,target,detail) VALUES(?,?,?,?)");
+    const merges = db.prepare("SELECT id,target,detail FROM audit_logs WHERE action='wallet.merge_alias' ORDER BY id DESC").all() as Array<{id:number;target:string;detail:string}>;
+    for (const merge of merges) {
+      let detail: {from?:string;moved?:string};
+      try { detail = JSON.parse(merge.detail); } catch { continue; }
+      if (!detail.from || !detail.moved || !merge.target) continue;
+      const current = BigInt((read.get(merge.target) as {balance:string}|undefined)?.balance ?? "0");
+      const moved = BigInt(detail.moved);
+      const back = current < moved ? current : moved;
+      write.run(merge.target, (current - back).toString());
+      const fromBalance = BigInt((read.get(detail.from) as {balance:string}|undefined)?.balance ?? "0");
+      write.run(detail.from, (fromBalance + back).toString());
+      log.run("system", "wallet.merge_alias_revert", merge.target, JSON.stringify({ mergeAuditId: merge.id, to: detail.from, returned: back.toString() }));
+    }
+    db.prepare("DELETE FROM member_aliases").run();
+    db.prepare("DELETE FROM members").run();
+    db.prepare(`INSERT INTO settings(key,value) VALUES('member_identity_version','3')
+      ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run();
+  })();
+}
+migrateMemberIdentityV3();
+
+/**
  * Older builds stored wallets under an alphanumeric globalId. When an alias
  * now points to a different canonical UID, move that balance onto the
  * canonical wallet so nobody loses money after a member re-sync.

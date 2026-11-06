@@ -337,32 +337,18 @@ class ZaloClient extends EventEmitter {
     this.adminCache.set(groupId, { at: Date.now(), ids });
     return ids;
   }
-  /** Raw sender IDs + stored aliases + IDs from the sender's Zalo profile. */
-  private async senderIdentity(groupId: string, rawIds: string[]) {
-    const ids = repository.identityIds(groupId, rawIds);
-    if (!this.api) return ids;
-    const lookup = [...ids].filter(isNumericZaloId);
-    if (lookup.length) {
-      const profiles = await fetchGroupMemberProfiles(lookup, (batch) =>
-        this.api!.getGroupMembersInfo(batch),
-      ).catch(() => [] as any[]);
-      for (const profile of profiles)
-        for (const id of [profile.__lookupId, profile.id, profile.globalId]) {
-          const normalized = usableId(id);
-          if (normalized) ids.add(normalized);
-        }
-    }
-    return ids;
-  }
   /**
    * Live permission check for special commands: ZALO_ADMIN_IDS, the group
    * owner or any deputy. Does not depend on the member list being complete.
    */
   async isGroupAdmin(message: IncomingGroupMessage): Promise<boolean> {
-    const raw = [message.senderId, ...message.senderIds];
-    const quick = repository.identityIds(message.groupId, raw);
-    if (hasWalletAdminPermission(quick, config.adminIds)) return true;
-    const identity = await this.senderIdentity(message.groupId, raw);
+    // Only the IDs on the message itself plus member-unique aliases: profile
+    // globalIds can be shared by many members and must not grant admin.
+    const identity = repository.identityIds(message.groupId, [
+      message.senderId,
+      ...message.senderIds,
+    ]);
+    if (hasWalletAdminPermission(identity, config.adminIds)) return true;
     let admins = await this.groupAdminIds(message.groupId);
     if (!hasWalletAdminPermission(identity, config.adminIds, admins))
       admins = await this.groupAdminIds(message.groupId, true);
@@ -474,6 +460,10 @@ class ZaloClient extends EventEmitter {
       return [] as any[];
     });
     const normalized = normalizeGroupMembers(workingInfo, profiles);
+    if (normalized.ambiguousIds.length)
+      warnings.push(
+        `Bỏ qua ${normalized.ambiguousIds.length} ID hồ sơ dùng chung cho nhiều thành viên (${normalized.ambiguousIds.slice(0, 3).join(", ")})`,
+      );
     const partial = total > normalized.members.length;
     if (normalized.members.length) {
       if (partial) {

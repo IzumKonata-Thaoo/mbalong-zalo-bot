@@ -124,6 +124,42 @@ describe("Zalo group member normalization", () => {
     ]);
   });
 
+  it("never collapses members that Zalo returns with the same globalId/profile id", () => {
+    const shared = "118908036120340262";
+    const result = normalizeGroupMembers(
+      {
+        memVerList: ["7752116371940807681_0", "5550000000000000001_0", "5550000000000000002_0"],
+        creatorId: "5550000000000000001",
+        adminIds: [],
+        currentMems: [],
+      },
+      [
+        { __lookupId: "7752116371940807681", id: shared, globalId: "NOUL6BL3CKBPJ8DQVPBVJ4U70LQJQV00", displayName: "Quynhh Giangg" },
+        { __lookupId: "5550000000000000001", id: shared, globalId: "NOUL6BL3CKBPJ8DQVPBVJ4U70LQJQV00", displayName: "Phương Anh" },
+        { __lookupId: "5550000000000000002", id: shared, globalId: "NOUL6BL3CKBPJ8DQVPBVJ4U70LQJQV00", displayName: "Đặng Gia Bảo" },
+      ],
+    );
+    expect(result.members).toEqual([
+      { id: "7752116371940807681", name: "Quynhh Giangg", avatar: undefined, role: "member" },
+      { id: "5550000000000000001", name: "Phương Anh", avatar: undefined, role: "admin" },
+      { id: "5550000000000000002", name: "Đặng Gia Bảo", avatar: undefined, role: "member" },
+    ]);
+    expect(result.aliases.map((alias) => alias.aliasId)).not.toContain(shared);
+    expect(result.aliases.map((alias) => alias.aliasId)).not.toContain("NOUL6BL3CKBPJ8DQVPBVJ4U70LQJQV00");
+    expect(result.ambiguousIds).toEqual(expect.arrayContaining([shared, "NOUL6BL3CKBPJ8DQVPBVJ4U70LQJQV00"]));
+  });
+
+  it("never merges a profile into another member's list UID", () => {
+    const result = normalizeGroupMembers(
+      { memVerList: ["5550000000000000001_0", "5550000000000000002_0"], adminIds: ["5550000000000000002"] },
+      [{ __lookupId: "5550000000000000001", id: "5550000000000000002", displayName: "A" }],
+    );
+    expect(result.members.map((m) => [m.id, m.role])).toEqual([
+      ["5550000000000000001", "member"],
+      ["5550000000000000002", "admin"],
+    ]);
+  });
+
   it("counts the owner and deputies as members even when the member list is empty", () => {
     expect(
       extractGroupMemberIds({

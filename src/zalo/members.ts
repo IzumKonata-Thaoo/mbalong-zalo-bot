@@ -215,108 +215,91 @@ export function describeGroupInfo(info: any) {
 }
 
 /**
- * Groups every ID Zalo uses for the same person (member-list UID, profile
- * lookup key, profile id, globalId) and stores one member per person.
+ * Builds one stored member per member-list ID.
  *
- * The canonical ID is the numeric UID Zalo uses in group messages, mentions,
- * kick/add calls and `/nap ZALO_ID`; alphanumeric globalIds are kept as aliases.
+ * The member-list UID (memVerList/memberIds/currentMems/owner/deputies, the
+ * same UID Zalo puts in uidFrom and mentions) is always the canonical ID and
+ * two member-list IDs are never merged. Extra IDs from a profile (profile.id,
+ * globalId…) become aliases only when exactly one member owns them: Zalo can
+ * return the same globalId/id for many members, and trusting it would collapse
+ * the whole group into one person and leak the admin role.
  */
 export function normalizeGroupMembers(
   info: any,
   fetchedProfiles: any[],
-): { members: StoredGroupMember[]; aliases: MemberAlias[] } {
-  const parent = new Map<string, string>();
-  const find = (id: string): string => {
-    let root = id;
-    while (parent.get(root) !== root) root = parent.get(root)!;
-    let cursor = id;
-    while (cursor !== root) {
-      const next = parent.get(cursor)!;
-      parent.set(cursor, root);
-      cursor = next;
-    }
-    return root;
-  };
-  const add = (id: string) => {
-    if (!parent.has(id)) parent.set(id, id);
-  };
-  const union = (a: string, b: string) => {
-    add(a);
-    add(b);
-    const ra = find(a), rb = find(b);
-    if (ra !== rb) parent.set(rb, ra);
-  };
-
+): { members: StoredGroupMember[]; aliases: MemberAlias[]; ambiguousIds: string[] } {
+  const listIds = extractGroupMemberIds(info);
   const current = Array.isArray(info?.currentMems) ? info.currentMems : [];
-  const profiles = [...current, ...fetchedProfiles];
-  const profilesById = new Map<string, any[]>();
-  for (const profile of profiles) {
-    if (!profile || typeof profile !== "object") continue;
-    const ids = [
-      profile.__lookupId,
-      profile.id,
-      profile.uid,
-      profile.userId,
-      profile.globalId,
-    ].map(usableId).filter(Boolean);
-    if (!ids.length) continue;
-    for (const id of ids) {
-      add(id);
-      union(ids[0]!, id);
-      const list = profilesById.get(id) ?? [];
-      list.push(profile);
-      profilesById.set(id, list);
-    }
+
+  const profileByKey = new Map<string, any>();
+  for (const profile of current) {
+    const key = usableId(profile?.id);
+    if (key && !profileByKey.has(key)) profileByKey.set(key, profile);
+  }
+  for (const profile of fetchedProfiles) {
+    const key = usableId(profile?.__lookupId) || usableId(profile?.id);
+    if (key) profileByKey.set(key, { ...profileByKey.get(key), ...profile });
   }
 
-  const primaryIds = extractGroupMemberIds(info);
-  const primary = new Set(primaryIds);
-  const order = [
-    ...primaryIds,
-    ...fetchedProfiles.map((profile: any) => usableId(profile?.__lookupId)),
-    ...fetchedProfiles.map((profile: any) => usableId(profile?.id)),
-  ].filter(Boolean);
-  order.forEach(add);
+  const keys = [...new Set([
+    ...listIds,
+    ...fetchedProfiles.map((profile: any) =>
+      usableId(profile?.__lookupId) || usableId(profile?.id)),
+  ].filter(Boolean))];
+  const keySet = new Set(keys);
+
+  // Extra IDs claimed by each member key.
+  const owners = new Map<string, Set<string>>();
+  const extrasOf = (key: string) => {
+    const profile = profileByKey.get(key);
+    if (!profile) return [];
+    return [profile.id, profile.uid, profile.userId, profile.globalId]
+      .map(usableId)
+      .filter((id) => id && id !== key);
+  };
+  for (const key of keys)
+    for (const extra of extrasOf(key)) {
+      const set = owners.get(extra) ?? new Set<string>();
+      set.add(key);
+      owners.set(extra, set);
+    }
+  const ambiguous = new Set<string>();
+  const aliasOwner = new Map<string, string>();
+  for (const [extra, set] of owners) {
+    // An extra ID is trusted only if one member owns it, and it is not itself
+    // the member-list ID of someone else.
+    const owner = [...set][0]!;
+    if (set.size === 1 && (!keySet.has(extra) || !isNumericZaloId(extra)))
+      aliasOwner.set(extra, owner);
+    else ambiguous.add(extra);
+  }
 
   const adminIds = new Set(extractGroupAdminIds(info));
-  const groups = new Map<string, string[]>();
-  for (const id of parent.keys()) {
-    const root = find(id);
-    const list = groups.get(root) ?? [];
-    list.push(id);
-    groups.set(root, list);
-  }
-
   const members: StoredGroupMember[] = [];
   const aliases: MemberAlias[] = [];
-  const emitted = new Set<string>();
-  for (const id of order) {
-    const root = find(id);
-    if (emitted.has(root)) continue;
-    emitted.add(root);
-    const ids = groups.get(root) ?? [id];
-    const canonicalId =
-      ids.find((candidate) => primary.has(candidate) && isNumericZaloId(candidate)) ??
-      ids.find((candidate) => isNumericZaloId(candidate)) ??
-      ids.find((candidate) => primary.has(candidate)) ??
-      id;
-    const candidates = ids.flatMap((candidate) => profilesById.get(candidate) ?? []);
+  for (const key of keys) {
+    // A non-numeric list ID (e.g. a link member listed by globalId) that
+    // belongs to a numeric member is that member, not a new person.
+    const owner = aliasOwner.get(key);
+    if (owner && owner !== key && !isNumericZaloId(key)) continue;
+    const own = [key, ...[...aliasOwner].filter(([, o]) => o === key).map(([extra]) => extra)];
+    const profiles = own.map((id) => profileByKey.get(id)).filter(Boolean);
     const profile =
-      candidates.find((item) => item.displayName || item.dName || item.zaloName) ??
-      candidates[0];
-    members.push({
-      id: canonicalId,
+      profiles.find((item) => item.displayName || item.dName || item.zaloName) ??
+      profiles[0];
+    const member: StoredGroupMember = {
+      id: key,
       name:
         profile?.displayName ||
         profile?.dName ||
         profile?.zaloName ||
-        `Zalo ${canonicalId}`,
+        `Zalo ${key}`,
       avatar: profile?.avatar || undefined,
-      role: ids.some((candidate) => adminIds.has(candidate)) ? "admin" : "member",
-    });
-    const ordered = [canonicalId, ...ids.filter((candidate) => candidate !== canonicalId)];
-    for (const aliasId of ordered) aliases.push({ aliasId, zaloId: canonicalId });
+      role: own.some((id) => adminIds.has(id)) ? "admin" : "member",
+    };
+    members.push(member);
+    for (const aliasId of own) aliases.push({ aliasId, zaloId: key });
   }
 
-  return { members, aliases };
+  return { members, aliases, ambiguousIds: [...ambiguous] };
 }
