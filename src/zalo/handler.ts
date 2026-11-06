@@ -7,6 +7,7 @@ import { handleWalletCommand } from "../games/wallet.js";
 import { parseWalletCommand } from "../games/wallet-rules.js";
 import { KeyedSerialQueue } from "../queue.js";
 import { downloadZaloImage } from "../ai/image.js";
+import { isClearContextCommand } from "../ai/context-command.js";
 import { handleMusic } from "../music/service.js";
 import { parseMusicIntent } from "../music/rules.js";
 import type { IncomingGroupMessage } from "../types.js";
@@ -22,6 +23,7 @@ const queues: Record<MessageLane, KeyedSerialQueue> = {
 
 function messageLane(question: string, hasImage: boolean): MessageLane {
   if (hasImage) return "ai";
+  if (isClearContextCommand(question)) return "ai";
   if (parseWalletCommand(question)) return "game";
   if (parseTaiXiu(question)) return "game";
   if (parseMusicIntent(question)) return "music";
@@ -30,6 +32,24 @@ function messageLane(question: string, hasImage: boolean): MessageLane {
 
 async function processMessage(message: IncomingGroupMessage, question: string) {
   try {
+    if (!message.imageUrl && isClearContextCommand(question)) {
+      if (!(await zaloClient.isGroupAdmin(message))) {
+        await zaloClient.send(
+          message.groupId,
+          "Chỉ trưởng nhóm, phó nhóm hoặc admin hệ thống được xoá ngữ cảnh của bot.",
+          message.raw,
+        );
+        return;
+      }
+      const cleared = repository.clearGroupContext(message.groupId);
+      repository.audit(message.senderId, "ai.context_clear", message.groupId, cleared);
+      await zaloClient.send(
+        message.groupId,
+        `🧹 Đã xoá ngữ cảnh trò chuyện của ${config.BOT_NAME} trong nhóm (${cleared.messages} tin nhắn${cleared.summaries ? " và bản tóm tắt" : ""}). Bot bắt đầu cuộc trò chuyện mới.`,
+        message.raw,
+      );
+      return;
+    }
     const walletResponse = message.imageUrl
       ? null
       : await handleWalletCommand(message, question, {

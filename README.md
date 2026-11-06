@@ -94,6 +94,14 @@ ZALO_ADMIN_IDS=123456789,987654321
 
 Trong group, thành viên chỉ cần tag tài khoản bot và đặt câu hỏi. Câu “@MbaLong hãy tóm tắt…” kích hoạt tóm tắt hội thoại.
 
+Xoá ngữ cảnh (bộ nhớ hội thoại và bản tóm tắt của nhóm) để bot bắt đầu lại từ đầu; chỉ trưởng nhóm, phó nhóm hoặc `ZALO_ADMIN_IDS`:
+
+```text
+@MbaLong /xoacontext
+@MbaLong /reset
+@MbaLong /xóa ngữ cảnh
+```
+
 ## Trò chơi tài xỉu
 
 Số tiền cược và số dư được lưu chính xác theo Zalo UID bằng chuỗi số nguyên trong SQLite; bot dùng `BigInt` nên không giới hạn bởi kiểu số JavaScript và không dùng đơn vị tiền tệ. Người chơi phải có đủ số dư trước khi cược. Thắng được cộng đúng một lần mức cược, thua hoặc ra bộ ba bị trừ mức cược.

@@ -156,6 +156,14 @@ export const repository = {
   summary(groupId: string) {
     return db.prepare("SELECT content,through_message_id FROM summaries WHERE group_id=?").get(groupId) as {content:string;through_message_id:number}|undefined;
   },
+  /** Forget the group's AI context: stored chat turns and the rolling summary. */
+  clearGroupContext(groupId: string) {
+    return db.transaction(() => {
+      const messages = db.prepare("DELETE FROM messages WHERE group_id=?").run(groupId).changes;
+      const summaries = db.prepare("DELETE FROM summaries WHERE group_id=?").run(groupId).changes;
+      return { messages, summaries };
+    })();
+  },
   saveSummary(groupId: string, content: string, throughId: number) {
     db.prepare(`INSERT INTO summaries(group_id,content,through_message_id) VALUES(?,?,?)
       ON CONFLICT(group_id) DO UPDATE SET content=excluded.content,through_message_id=excluded.through_message_id,updated_at=CURRENT_TIMESTAMP`).run(groupId, content, throughId);
