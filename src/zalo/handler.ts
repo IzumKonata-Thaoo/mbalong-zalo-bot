@@ -3,6 +3,8 @@ import { repository } from "../db.js";
 import { answerGroup, summarizeGroup } from "../ai/assistant.js";
 import { handleTaiXiu } from "../games/tai-xiu.js";
 import { parseTaiXiu } from "../games/tai-xiu-rules.js";
+import { handleWalletCommand } from "../games/wallet.js";
+import { parseWalletCommand } from "../games/wallet-rules.js";
 import { KeyedSerialQueue } from "../queue.js";
 import { downloadZaloImage } from "../ai/image.js";
 import { handleMusic } from "../music/service.js";
@@ -20,6 +22,7 @@ const queues: Record<MessageLane, KeyedSerialQueue> = {
 
 function messageLane(question: string, hasImage: boolean): MessageLane {
   if (hasImage) return "ai";
+  if (parseWalletCommand(question)) return "game";
   if (parseTaiXiu(question)) return "game";
   if (parseMusicIntent(question)) return "music";
   return "ai";
@@ -27,7 +30,16 @@ function messageLane(question: string, hasImage: boolean): MessageLane {
 
 async function processMessage(message: IncomingGroupMessage, question: string) {
   try {
-    const gameResponse = message.imageUrl ? null : handleTaiXiu(question);
+    const walletResponse = message.imageUrl
+      ? null
+      : handleWalletCommand(message, question, zaloClient.ownId);
+    if (walletResponse) {
+      await zaloClient.send(message.groupId, walletResponse, message.raw);
+      return;
+    }
+    const gameResponse = message.imageUrl
+      ? null
+      : handleTaiXiu(message.senderId, question);
     if (gameResponse) {
       await zaloClient.send(message.groupId, gameResponse, message.raw);
       return;
@@ -56,7 +68,9 @@ async function processMessage(message: IncomingGroupMessage, question: string) {
       await zaloClient.send(
         message.groupId,
         musicResponse.message,
-        message.raw,
+        musicResponse.replyToList && message.quoted
+          ? message.quoted
+          : message.raw,
       );
       if (musicResponse.soundCloudTrackUrl)
         try {

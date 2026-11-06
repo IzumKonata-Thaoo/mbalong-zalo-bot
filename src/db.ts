@@ -55,6 +55,11 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   detail TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS wallets (
+  zalo_id TEXT PRIMARY KEY,
+  balance TEXT NOT NULL DEFAULT '0',
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 `);
 
 export const repository = {
@@ -95,7 +100,32 @@ export const repository = {
     db.prepare("UPDATE groups SET member_count=? WHERE id=?").run(members.length,groupId);
   },
   members(groupId: string) { return db.prepare("SELECT * FROM members WHERE group_id=? ORDER BY role DESC,display_name").all(groupId); },
-  member(groupId:string,zaloId:string) { return db.prepare("SELECT * FROM members WHERE group_id=? AND zalo_id=?").get(groupId,zaloId) as {zalo_id:string;role:string}|undefined; },
+  member(groupId:string,zaloId:string) { return db.prepare("SELECT * FROM members WHERE group_id=? AND zalo_id=?").get(groupId,zaloId) as {zalo_id:string;display_name:string;role:string}|undefined; },
+  walletBalance(zaloId:string) {
+    const row=db.prepare("SELECT balance FROM wallets WHERE zalo_id=?").get(zaloId) as {balance:string}|undefined;
+    return BigInt(row?.balance ?? "0");
+  },
+  adjustWalletBalance(zaloId:string,delta:bigint): {ok:true;previous:bigint;balance:bigint}|{ok:false;balance:bigint} {
+    return db.transaction(() => {
+      const row=db.prepare("SELECT balance FROM wallets WHERE zalo_id=?").get(zaloId) as {balance:string}|undefined;
+      const previous=BigInt(row?.balance ?? "0"), balance=previous+delta;
+      if(balance<0n)return {ok:false as const,balance:previous};
+      db.prepare(`INSERT INTO wallets(zalo_id,balance,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)
+        ON CONFLICT(zalo_id) DO UPDATE SET balance=excluded.balance,updated_at=CURRENT_TIMESTAMP`).run(zaloId,balance.toString());
+      return {ok:true as const,previous,balance};
+    })();
+  },
+  settleTaiXiu(zaloId:string,stake:bigint,won:boolean): {ok:true;previous:bigint;balance:bigint}|{ok:false;balance:bigint} {
+    return db.transaction(() => {
+      const row=db.prepare("SELECT balance FROM wallets WHERE zalo_id=?").get(zaloId) as {balance:string}|undefined;
+      const previous=BigInt(row?.balance ?? "0");
+      if(previous<stake)return {ok:false as const,balance:previous};
+      const balance=won ? previous+stake : previous-stake;
+      db.prepare(`INSERT INTO wallets(zalo_id,balance,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)
+        ON CONFLICT(zalo_id) DO UPDATE SET balance=excluded.balance,updated_at=CURRENT_TIMESTAMP`).run(zaloId,balance.toString());
+      return {ok:true as const,previous,balance};
+    })();
+  },
   stats() {
     return {
       groups: (db.prepare("SELECT COUNT(*) n FROM groups").get() as {n:number}).n,

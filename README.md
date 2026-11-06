@@ -96,12 +96,27 @@ Trong group, thành viên chỉ cần tag tài khoản bot và đặt câu hỏi
 
 ## Trò chơi tài xỉu
 
-Số tiền cược chỉ là số nguyên dương dùng để hiển thị kết quả; bot dùng `BigInt` nên không giới hạn bởi kiểu số JavaScript, không quản lý số dư và không dùng đơn vị tiền tệ.
+Số tiền cược và số dư được lưu chính xác theo Zalo UID bằng chuỗi số nguyên trong SQLite; bot dùng `BigInt` nên không giới hạn bởi kiểu số JavaScript và không dùng đơn vị tiền tệ. Người chơi phải có đủ số dư trước khi cược. Thắng được cộng đúng một lần mức cược, thua hoặc ra bộ ba bị trừ mức cược.
 Các mức từ một triệu trở lên được hiển thị rút gọn, ví dụ `1 triệu`, `1,5 triệu`, `2 tỷ`.
+
+```text
+@MbaLong /sodu
+@MbaLong /tx tài 1000
+@MbaLong /tx xỉu 500
+```
+
+Chỉ Zalo UID có trong `ZALO_ADMIN_IDS` được cộng/trừ số dư. Không tag thêm ai thì lệnh áp dụng cho chính admin; muốn chỉnh thành viên khác, tag người đó hoặc nhập Zalo ID:
+
+```text
+@MbaLong /nap 10000
+@MbaLong @NgườiDùng /nap 10000
+@MbaLong /nap 123456789 10000
+@MbaLong @NgườiDùng /tru 5000
+```
 
 ### Tìm và phát nhạc
 
-Bot nhận câu tự nhiên như `@MbaLong tìm nhạc Nơi này có anh trên SoundCloud`, rồi trả tối đa 6 kết quả. Thành viên tag bot và nói `chọn 2` trong 10 phút để chọn bài. Bot dùng extractor SoundCloud công khai của `yt-dlp`, không cần tài khoản SoundCloud, Artist Pro, cookie, Client ID hoặc Client Secret. Bot chỉ xử lý track công khai và cắt tối đa 30 giây để gửi qua tin nhắn thoại Zalo; track private, DRM, giới hạn vùng hoặc yêu cầu đăng nhập sẽ bị bỏ qua hoặc báo không phát được.
+Bot nhận câu tự nhiên như `@MbaLong tìm nhạc Nơi này có anh trên SoundCloud`, rồi trả tối đa 6 kết quả. Thành viên reply đúng tin nhắn danh sách, tag bot và gửi `/chon 2` trong 10 phút để chọn bài. Bot dùng extractor SoundCloud công khai của `yt-dlp`, không cần tài khoản SoundCloud, Artist Pro, cookie, Client ID hoặc Client Secret. Bot chỉ xử lý track công khai và cắt tối đa 30 giây để gửi qua tin nhắn thoại Zalo; track private, DRM, giới hạn vùng hoặc yêu cầu đăng nhập sẽ bị bỏ qua hoặc báo không phát được.
 
 Đặt đường dẫn công cụ trong `.env` (thường không cần sửa):
 
@@ -136,7 +151,7 @@ DeepSeek dùng định dạng `OpenAI-compatible`. Trong web admin, bấm **Đi�
 @MbaLong /tx xỉu 500
 ```
 
-Ba xúc xắc giống nhau là bộ ba và nhà cái thắng. Các lượt trong cùng group được xử lý tuần tự; tin nhắn hỏi đáp của nhiều người không còn bị bỏ khi bot đang trả lời người trước.
+Ba xúc xắc giống nhau là bộ ba và nhà cái thắng. Các lượt của cùng một người được giữ đúng thứ tự trong từng luồng; nhiều thành viên trong nhóm vẫn được xử lý độc lập.
 
 ## Chạy nền bằng systemd
 

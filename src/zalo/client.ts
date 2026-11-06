@@ -10,6 +10,7 @@ import type { BotStatus, IncomingGroupMessage } from "../types.js";
 import { hasExactMention, stripExactMention } from "./policy.js";
 import { extractZaloPhoto } from "./media.js";
 import { withM4aPreview } from "../music/audio.js";
+import { buildGroupVoicePayload } from "./voice.js";
 
 type ZaloApi = any;
 
@@ -50,6 +51,7 @@ class ZaloClient extends EventEmitter {
         }
       } else api = await this.loginQr(zalo);
       this.api = api;
+      this.installKnownSizeVoiceSender(api);
       this.ownId = String(api.getOwnId());
       const own = await api.fetchAccountInfo().catch(() => null);
       this.accountName =
@@ -134,6 +136,7 @@ class ZaloClient extends EventEmitter {
             : (photo?.caption ?? ""),
         messageId: String(data.msgId ?? data.cliMsgId ?? ""),
         mentions: Array.isArray(data.mentions) ? data.mentions : [],
+        quoted: data?.quote,
         imageUrl: photo?.url,
         raw: message,
       };
@@ -159,7 +162,9 @@ class ZaloClient extends EventEmitter {
       await this.api.sendMessage(
         {
           msg: chunks[i],
-          ...(i === 0 && quote ? { quote: (quote as any).data } : {}),
+          ...(i === 0 && quote
+            ? { quote: (quote as any).data ?? quote }
+            : {}),
         },
         groupId,
         ThreadType.Group,
@@ -168,17 +173,63 @@ class ZaloClient extends EventEmitter {
   async sendVoiceFromStream(groupId: string, sourceUrl: string) {
     if (!this.api) throw new Error("Zalo chưa kết nối");
     return withM4aPreview(sourceUrl, async (path) => {
-      const uploaded = await this.api.uploadAttachment(
-        path,
-        groupId,
-        ThreadType.Group,
+      const uploaded = await withTimeout<any[]>(
+        this.api.uploadAttachment(path, groupId, ThreadType.Group),
+        30_000,
+        "Upload audio lên Zalo quá thời gian",
       );
-      const voiceUrl = uploaded?.find?.(
+      const voice = uploaded?.find?.(
         (item: any) => item?.fileType === "others" && item?.fileUrl,
-      )?.fileUrl;
-      if (!voiceUrl) throw new Error("Zalo không trả URL sau khi upload audio");
-      return this.api.sendVoice({ voiceUrl }, groupId, ThreadType.Group);
+      );
+      if (!voice?.fileUrl)
+        throw new Error("Zalo không trả URL sau khi upload audio");
+      const voiceUrl = new URL(String(voice.fileUrl));
+      if (
+        voiceUrl.protocol !== "https:" ||
+        voiceUrl.username ||
+        voiceUrl.password
+      )
+        throw new Error("URL audio Zalo sau upload không hợp lệ");
+      const fileSize = Number(voice.totalSize);
+      if (!Number.isSafeInteger(fileSize) || fileSize <= 0)
+        throw new Error("Zalo không trả dung lượng audio hợp lệ");
+      const sent = await withTimeout<{ msgId?: string }>(
+        this.api.sendVoiceKnownSize({
+          voiceUrl: voiceUrl.toString(),
+          fileSize,
+          groupId,
+        }),
+        15_000,
+        "Gửi tin nhắn ghi âm Zalo quá thời gian",
+      );
+      if (!sent?.msgId)
+        throw new Error("Zalo không xác nhận msgId của tin nhắn ghi âm");
+      console.log(`✓ Đã gửi voice Zalo ${sent.msgId} (${fileSize} bytes)`);
+      return sent;
     });
+  }
+  private installKnownSizeVoiceSender(api: ZaloApi) {
+    api.custom(
+      "sendVoiceKnownSize",
+      async ({ ctx, utils, props }: any) => {
+        const serviceUrl = utils.makeURL(
+          `${api.zpwServiceMap.file[0]}/api/group/forward`,
+        );
+        const params = buildGroupVoicePayload({
+          groupId: props.groupId,
+          voiceUrl: props.voiceUrl,
+          fileSize: props.fileSize,
+          imei: ctx.imei,
+        });
+        const encrypted = utils.encodeAES(JSON.stringify(params));
+        if (!encrypted) throw new Error("Không mã hóa được payload voice Zalo");
+        const response = await utils.request(serviceUrl, {
+          method: "POST",
+          body: new URLSearchParams({ params: encrypted }),
+        });
+        return utils.resolve(response);
+      },
+    );
   }
   async groupInfo(groupId: string) {
     if (!this.api) throw new Error("Zalo chưa kết nối");
@@ -239,5 +290,25 @@ function splitMessage(text: string, max: number) {
   }
   if (rest) out.push(rest);
   return out;
+}
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
 }
 export const zaloClient = new ZaloClient();

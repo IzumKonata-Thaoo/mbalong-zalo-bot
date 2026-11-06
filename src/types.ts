@@ -27,6 +27,7 @@ export interface IncomingGroupMessage {
   content: string;
   messageId: string;
   mentions: Array<{ uid?: string; pos?: number; len?: number }>;
+  quoted?: unknown;
   imageUrl?: string;
   raw: unknown;
 }

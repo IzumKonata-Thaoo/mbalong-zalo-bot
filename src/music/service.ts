@@ -11,6 +11,7 @@ export interface MusicTrack {
 export interface MusicAction {
   message: string;
   soundCloudTrackUrl?: string;
+  replyToList?: boolean;
 }
 interface SearchSession {
   expiresAt: number;
@@ -33,7 +34,7 @@ function listMessage(tracks: MusicTrack[]): string {
     (track, index) =>
       `${index + 1}. ${track.title}\n   ${track.artist} · ${formatDuration(track.durationMs)} · SoundCloud`,
   );
-  return `🎧 KẾT QUẢ SOUNDCLOUD\n\n${rows.join("\n\n")}\n\nTag MbaLong và nói “chọn 1” đến “chọn ${tracks.length}” trong 10 phút.`;
+  return `🎧 KẾT QUẢ SOUNDCLOUD\n\n${rows.join("\n\n")}\n\nReply tin nhắn danh sách này, tag MbaLong và gửi /chon 1 đến /chon ${tracks.length} trong 10 phút.`;
 }
 
 export async function handleMusic(
@@ -68,5 +69,6 @@ export async function handleMusic(
   return {
     message: `🎵 ${track.title}\n${track.artist}\nĐoạn nghe thử 30 giây từ SoundCloud`,
     soundCloudTrackUrl: track.url,
+    replyToList: true,
   };
 }

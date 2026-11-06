@@ -5,7 +5,8 @@ const SEARCH_PREFIX =
   /^(?:tìm kiếm|tim kiem|tìm|tim|kiếm|kiem|mở|mo)\s+(?:nhạc|nhac|bài hát|bai hat)\s+/i;
 const SOUNDCLOUD_SONG_PREFIX =
   /^(?:tìm kiếm|tim kiem|tìm|tim|kiếm|kiem|mở|mo)\s+(?:bài|bai)\s+/i;
-const SELECT = /^(?:chọn|chon|phát|phat|nghe)\s+(?:bài|bai)?\s*([1-6])\s*$/i;
+const SELECT =
+  /^(?:\/chon|chọn|chon|phát|phat|nghe)\s+(?:bài|bai)?\s*([1-6])\s*$/i;
 
 export function parseMusicIntent(input: string): MusicIntent {
   const text = input.trim();

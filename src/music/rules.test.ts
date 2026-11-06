@@ -13,6 +13,7 @@ describe("music commands", () => {
   });
   it("parses numbered selection without adding a user menu", () => {
     expect(parseMusicIntent("chọn 2")).toEqual({ kind: "select", index: 1 });
+    expect(parseMusicIntent("/chon 2")).toEqual({ kind: "select", index: 1 });
     expect(parseMusicIntent("phát bài 6")).toEqual({
       kind: "select",
       index: 5,
