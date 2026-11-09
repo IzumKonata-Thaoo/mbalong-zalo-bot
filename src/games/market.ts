@@ -159,7 +159,18 @@ export async function settleMarketPosition(
     );
     const settings = getGameSettings();
     const shouldWin = configuredWin(settings.marketWinRate);
-    const movement = Math.max(1, Math.abs(naturalExitPrice - position.entryPrice));
+    const rawMovement = Math.max(
+      1,
+      Math.abs(naturalExitPrice - position.entryPrice),
+    );
+    const marketDuration = position.marketCloseAt - position.openedAt;
+    // Losing positions get a more visible adverse move. Longer simulated
+    // windows amplify it further, while calculateLeveragedPnl still caps loss
+    // at the user's stake.
+    const lossMultiplier = shouldWin
+      ? 1
+      : 2 + Math.min(5, marketDuration / 60_000);
+    const movement = Math.max(1, Math.round(rawMovement * lossMultiplier));
     const winningDirection = position.side === "long" ? 1 : -1;
     const exitPrice =
       position.entryPrice + movement * winningDirection * (shouldWin ? 1 : -1);
@@ -183,6 +194,7 @@ export async function settleMarketPosition(
       stake: position.stake.toString(),
       leverage: position.leverage.toString(),
       marketDurationMs: position.marketCloseAt - position.openedAt,
+      lossMultiplier,
       processingDelayMs: position.settleAt - position.openedAt,
       entryPrice: position.entryPrice,
       exitPrice,

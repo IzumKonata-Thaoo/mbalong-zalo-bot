@@ -127,6 +127,8 @@ Long/Short dùng chung số dư với tài xỉu. Mỗi nhóm có một đườn
 
 Đòn bẩy nhận mọi số nguyên dương (`1x`, `100x`, `999999x` hoặc lớn hơn) và được tính bằng `BigInt`, không đặt mức tối đa. Lỗ vẫn bị giới hạn tối đa bằng tiền vào lệnh; lãi không đặt trần. `/market` gửi ảnh biểu đồ PNG 1280×720 trực tiếp lên Zalo.
 
+Khi một vị thế thua, biên độ bất lợi được tăng theo khung mô phỏng để mức lỗ rõ hơn; khung càng dài thì biến động thua càng mạnh. Mức lỗ cuối cùng vẫn không vượt quá tiền vào lệnh.
+
 Tham số cuối là khung thời gian mô phỏng, nhận giây (`30s`) hoặc phút (`2m`), trong khoảng 5 giây đến 5 phút. Dù chọn `5m`, kết quả vẫn được trả sau 5–7 giây thực tế. Không nhập thì cả khung mô phỏng lẫn thời gian trả kết quả dùng 5–7 giây ngẫu nhiên. Nếu wallet của người chơi về 0 trong lúc bot đang xử lý lệnh, bot tự đóng vị thế ngay và thông báo trong nhóm; vị thế đó không tính thắng/thua hay nổ hũ.
 
 `/bxh` (hoặc `/top`) xếp hạng tổng tiền thắng từ tài xỉu và Long/Short. Tiền admin nạp/trừ không được tính. Dữ liệu bắt đầu tích lũy từ khi cài bản có bảng xếp hạng. Admin chỉnh tỉ lệ thắng riêng cho hai trò tại **Cấu hình → Tỉ lệ thắng trò chơi**; thay đổi có hiệu lực ngay với các ván mới.
