@@ -20,6 +20,10 @@ import {
   saveAISettings,
 } from "../settings.js";
 import { ai } from "../ai/provider.js";
+import {
+  getGameSettings,
+  saveGameSettings,
+} from "../games/game-settings.js";
 
 const loginSchema = z.object({ password: z.string().min(1).max(256) });
 const idSchema = z.object({ id: z.string().min(1).max(64).regex(/^\d+$/) });
@@ -31,6 +35,10 @@ const aiSettingsSchema = z.object({
   systemPrompt: z.string().max(10000),
   apiKey: z.string().trim().max(10000).optional(),
   clearApiKey: z.boolean().optional(),
+});
+const gameSettingsSchema = z.object({
+  taiXiuWinRate: z.number().int().min(0).max(100),
+  marketWinRate: z.number().int().min(0).max(100),
 });
 const attempts = new Map<string, { count: number; reset: number }>();
 
@@ -175,6 +183,7 @@ export function createServer() {
         soundCloud: true,
         provider: "yt-dlp",
       },
+      games: getGameSettings(),
       adminIds: [...config.adminIds],
       sessionPath: config.SESSION_PATH,
     }),
@@ -197,6 +206,16 @@ export function createServer() {
       apiKeyChanged: Boolean(parsed.data.apiKey),
       apiKeyCleared: Boolean(parsed.data.clearApiKey),
     });
+    res.json(saved);
+  });
+  app.put("/api/config/games", (req: AuthRequest, res) => {
+    const parsed = gameSettingsSchema.safeParse(req.body);
+    if (!parsed.success)
+      return res.status(400).json({
+        error: "Tỉ lệ thắng phải là số nguyên từ 0 đến 100",
+      });
+    const saved = saveGameSettings(parsed.data);
+    repository.audit(req.admin!.sub, "config.games.update", "game-win-rates", saved);
     res.json(saved);
   });
   app.post("/api/config/ai/test", async (_req, res, next) => {

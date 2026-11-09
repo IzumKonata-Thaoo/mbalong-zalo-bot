@@ -1,6 +1,71 @@
 .ai-config {
   margin-bottom: 16px;
 }
+.game-config {
+  margin-bottom: 16px;
+}
+.game-config .config-heading > span {
+  margin-left: auto;
+}
+.rate-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 20px;
+}
+.rate-card {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #091723;
+}
+.rate-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.rate-title > svg {
+  width: 20px;
+  color: var(--mint);
+}
+.rate-title > div {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+}
+.rate-title b {
+  color: #e5f0f6;
+  font-size: 13px;
+}
+.rate-title small {
+  color: #5f7689;
+  font-size: 9px;
+}
+.rate-title strong {
+  color: var(--mint);
+  font: 700 22px "Manrope";
+}
+.rate-inputs {
+  display: grid;
+  grid-template-columns: 1fr 74px;
+  align-items: center;
+  gap: 13px;
+  margin-top: 17px;
+}
+.rate-inputs input[type="range"] {
+  accent-color: var(--mint);
+  width: 100%;
+}
+.rate-inputs input[type="number"] {
+  width: 100%;
+  background: #07131f;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: #edf6fb;
+  padding: 9px 8px;
+  text-align: center;
+  outline: none;
+}
 .config-heading {
   display: flex;
   align-items: center;
@@ -159,5 +224,8 @@
   .save-config {
     width: 100%;
     justify-content: center;
+  }
+  .rate-grid {
+    grid-template-columns: 1fr;
   }
 }

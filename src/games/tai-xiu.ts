@@ -1,10 +1,12 @@
 import { randomInt } from "node:crypto";
 import { repository } from "../db.js";
 import {
+  type TaiXiuChoice,
   formatBetAmount,
   parseTaiXiu,
   resolveTaiXiu,
 } from "./tai-xiu-rules.js";
+import { configuredWin, getGameSettings } from "./game-settings.js";
 
 export function rollDice() {
   return [randomInt(1, 7), randomInt(1, 7), randomInt(1, 7)] as [
@@ -13,20 +15,37 @@ export function rollDice() {
     number,
   ];
 }
-export function handleTaiXiu(senderId: string, input: string): string | null {
+
+export function rollDiceForResult(choice: TaiXiuChoice, won: boolean) {
+  for (;;) {
+    const dice = rollDice();
+    if ((resolveTaiXiu(dice) === choice) === won) return dice;
+  }
+}
+
+export function handleTaiXiu(
+  senderId: string,
+  input: string,
+  senderName = `Zalo ${senderId.slice(-6)}`,
+): string | null {
   const command = parseTaiXiu(input);
   if (!command) return null;
   const currentBalance = repository.walletBalance(senderId);
-  const guide = `Cách chơi: @MbaLong /tx tài 1000\nhoặc: @MbaLong /tx xỉu 1000\n\nXem số dư: @MbaLong /sodu\nChỉ nhập số nguyên, không kèm đơn vị tiền tệ.`;
+  const guide = `Cách chơi: @MbaLong /tx tài 1000\nhoặc: @MbaLong /tx xỉu 1000\n\nXem số dư: @MbaLong /sodu\nBảng xếp hạng: @MbaLong /bxh\nChỉ nhập số nguyên, không kèm đơn vị tiền tệ.`;
   if (command.kind === "help") return `🎲 TÀI XỈU · MBALONG\n\nSố dư: ${formatBetAmount(currentBalance)}\n\n${guide}`;
   if (command.kind === "invalid") return `⚠️ Cú pháp chưa đúng.\n\n${guide}`;
   if (command.amount <= 0n) return "Mức cược phải là số nguyên dương hợp lệ.";
   if (currentBalance < command.amount)
     return `Số dư không đủ.\n\nSố dư: ${formatBetAmount(currentBalance)}\nMức cược: ${formatBetAmount(command.amount)}`;
-  const dice = rollDice(),
+  const won = configuredWin(getGameSettings().taiXiuWinRate);
+  const dice = rollDiceForResult(command.choice, won),
     outcome = resolveTaiXiu(dice);
-  const won = outcome === command.choice;
-  const settlement = repository.settleTaiXiu(senderId, command.amount, won);
+  const settlement = repository.settleTaiXiu(
+    senderId,
+    command.amount,
+    won,
+    senderName,
+  );
   if (!settlement.ok)
     return `Số dư không đủ. Số dư hiện tại: ${formatBetAmount(settlement.balance)}.`;
   const label =

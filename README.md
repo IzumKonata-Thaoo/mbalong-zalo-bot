@@ -122,9 +122,12 @@ Long/Short dùng chung số dư với tài xỉu. Mỗi nhóm có một đườn
 @MbaLong /trade
 @MbaLong /long 10000 10x
 @MbaLong /short 5000 20x
+@MbaLong /bxh
 ```
 
 Đòn bẩy hỗ trợ: `1x`, `2x`, `3x`, `5x`, `10x`, `20x`, `25x`, `50x`, `75x`, `100x`. `/market` gửi ảnh biểu đồ PNG 1280×720 trực tiếp lên Zalo.
+
+`/bxh` (hoặc `/top`) xếp hạng tổng tiền thắng từ tài xỉu và Long/Short. Tiền admin nạp/trừ không được tính. Dữ liệu bắt đầu tích lũy từ khi cài bản có bảng xếp hạng. Admin chỉnh tỉ lệ thắng riêng cho hai trò tại **Cấu hình → Tỉ lệ thắng trò chơi**; thay đổi có hiệu lực ngay với các ván mới.
 
 Zalo UID có trong `ZALO_ADMIN_IDS` hoặc admin thật của group được cộng/trừ số dư. Không tag thêm ai thì lệnh áp dụng cho chính admin; muốn chỉnh thành viên khác, tag người đó hoặc nhập Zalo ID:
 

@@ -21,6 +21,9 @@ import {
   X,
   UserPlus,
   Trash2,
+  Dices,
+  TrendingUp,
+  Trophy,
 } from "lucide-react";
 import { api } from "./api";
 
@@ -734,6 +737,11 @@ function SettingsPage() {
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [taiXiuWinRate, setTaiXiuWinRate] = useState(50);
+  const [marketWinRate, setMarketWinRate] = useState(50);
+  const [gameBusy, setGameBusy] = useState(false);
+  const [gameMsg, setGameMsg] = useState("");
+  const [gameError, setGameError] = useState("");
   useEffect(() => {
     api<any>("/config").then((data) => {
       setCfg(data);
@@ -741,6 +749,8 @@ function SettingsPage() {
       setModel(data.ai.model);
       setFormat(data.ai.format ?? "openai");
       setSystemPrompt(data.ai.systemPrompt ?? "");
+      setTaiXiuWinRate(data.games?.taiXiuWinRate ?? 50);
+      setMarketWinRate(data.games?.marketWinRate ?? 50);
     });
   }, []);
   if (!cfg) return <PageLoader />;
@@ -778,6 +788,29 @@ function SettingsPage() {
       setMsg("");
     } finally {
       setBusy(false);
+    }
+  }
+  async function saveGameConfig(e: React.FormEvent) {
+    e.preventDefault();
+    setGameBusy(true);
+    setGameMsg("");
+    setGameError("");
+    try {
+      const saved = await api<{ taiXiuWinRate: number; marketWinRate: number }>(
+        "/config/games",
+        {
+          method: "PUT",
+          body: JSON.stringify({ taiXiuWinRate, marketWinRate }),
+        },
+      );
+      setTaiXiuWinRate(saved.taiXiuWinRate);
+      setMarketWinRate(saved.marketWinRate);
+      setCfg({ ...cfg, games: saved });
+      setGameMsg("Đã áp dụng tỉ lệ thắng cho các ván mới.");
+    } catch (e) {
+      setGameError((e as Error).message);
+    } finally {
+      setGameBusy(false);
     }
   }
   return (
@@ -872,6 +905,80 @@ function SettingsPage() {
         {msg && <div className="save-message">{msg}</div>}
         <button className="save-config" disabled={busy || !baseUrl || !model}>
           {busy ? "Đang lưu và kiểm tra…" : "Lưu & kiểm tra kết nối"}
+          <ArrowRight />
+        </button>
+      </form>
+      <form className="panel game-config" onSubmit={saveGameConfig}>
+        <div className="config-heading">
+          <div className="mini-icon">
+            <Trophy />
+          </div>
+          <div>
+            <h3>Tỉ lệ thắng trò chơi</h3>
+            <p>Áp dụng cho từng ván mới; số dư dùng chung giữa cả hai trò.</p>
+          </div>
+          <span className="configured">Đang hoạt động</span>
+        </div>
+        <div className="rate-grid">
+          <section className="rate-card">
+            <div className="rate-title">
+              <Dices />
+              <div>
+                <b>Tài xỉu</b>
+                <small>Xác suất người đặt cược thắng</small>
+              </div>
+              <strong>{taiXiuWinRate}%</strong>
+            </div>
+            <div className="rate-inputs">
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={taiXiuWinRate}
+                onChange={(e) => setTaiXiuWinRate(Number(e.target.value))}
+              />
+              <input
+                aria-label="Tỉ lệ thắng tài xỉu"
+                type="number"
+                min="0"
+                max="100"
+                value={taiXiuWinRate}
+                onChange={(e) => setTaiXiuWinRate(Number(e.target.value))}
+              />
+            </div>
+          </section>
+          <section className="rate-card">
+            <div className="rate-title">
+              <TrendingUp />
+              <div>
+                <b>Long / Short</b>
+                <small>Xác suất vị thế chốt có lãi</small>
+              </div>
+              <strong>{marketWinRate}%</strong>
+            </div>
+            <div className="rate-inputs">
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={marketWinRate}
+                onChange={(e) => setMarketWinRate(Number(e.target.value))}
+              />
+              <input
+                aria-label="Tỉ lệ thắng long short"
+                type="number"
+                min="0"
+                max="100"
+                value={marketWinRate}
+                onChange={(e) => setMarketWinRate(Number(e.target.value))}
+              />
+            </div>
+          </section>
+        </div>
+        {gameError && <div className="error">{gameError}</div>}
+        {gameMsg && <div className="save-message">{gameMsg}</div>}
+        <button className="save-config" disabled={gameBusy}>
+          {gameBusy ? "Đang lưu…" : "Lưu tỉ lệ thắng"}
           <ArrowRight />
         </button>
       </form>
@@ -1042,6 +1149,7 @@ const ACTION_NAMES: Record<string, string> = {
   "group.disable": "Tắt phản hồi nhóm",
   "member.add": "Mời thành viên",
   "member.remove": "Xóa thành viên",
+  "config.games.update": "Cập nhật tỉ lệ thắng",
 };
 const actionName = (s: string) => ACTION_NAMES[s] ?? s;
 const statusName = (s: string) =>

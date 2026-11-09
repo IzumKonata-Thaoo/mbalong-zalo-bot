@@ -20,6 +20,10 @@ import {
 } from "../games/market-rules.js";
 import { handleWalletCommand } from "../games/wallet.js";
 import { parseWalletCommand } from "../games/wallet-rules.js";
+import {
+  isLeaderboardCommand,
+  leaderboardMessage,
+} from "../games/leaderboard.js";
 import { KeyedSerialQueue } from "../queue.js";
 import { downloadZaloImage } from "../ai/image.js";
 import { isClearContextCommand } from "../ai/context-command.js";
@@ -40,6 +44,7 @@ function messageLane(question: string, hasImage: boolean): MessageLane {
   if (hasImage) return "ai";
   if (isClearContextCommand(question)) return "ai";
   if (parseWalletCommand(question)) return "game";
+  if (isLeaderboardCommand(question)) return "game";
   if (parseMarketCommand(question)) return "game";
   if (parseTaiXiu(question)) return "game";
   if (parseMusicIntent(question)) return "music";
@@ -76,6 +81,14 @@ async function processMessage(message: IncomingGroupMessage, question: string) {
         });
     if (walletResponse) {
       await zaloClient.send(message.groupId, walletResponse, message.raw);
+      return;
+    }
+    if (!message.imageUrl && isLeaderboardCommand(question)) {
+      await zaloClient.send(
+        message.groupId,
+        leaderboardMessage(),
+        message.raw,
+      );
       return;
     }
     const marketCommand = message.imageUrl ? null : parseMarketCommand(question);
@@ -135,7 +148,7 @@ async function processMessage(message: IncomingGroupMessage, question: string) {
     }
     const gameResponse = message.imageUrl
       ? null
-      : handleTaiXiu(message.senderId, question);
+      : handleTaiXiu(message.senderId, question, message.senderName);
     if (gameResponse) {
       await zaloClient.send(message.groupId, gameResponse, message.raw);
       return;

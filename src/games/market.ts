@@ -1,6 +1,7 @@
 import { randomInt, randomUUID } from "node:crypto";
 import { repository } from "../db.js";
 import { formatBetAmount } from "./tai-xiu-rules.js";
+import { configuredWin, getGameSettings } from "./game-settings.js";
 import {
   MARKET_LEVERAGES,
   MARKET_SESSION_MS,
@@ -42,6 +43,7 @@ export const marketGuide = [
   "• @MbaLong /long 10000 10x",
   "• @MbaLong /short 10000 20x",
   "• @MbaLong /sodu — xem số dư dùng chung với tài xỉu",
+  "• @MbaLong /bxh — xem bảng xếp hạng hai trò",
   "",
   `Đòn bẩy: ${MARKET_LEVERAGES.map((value) => `${value}x`).join(", ")}`,
   "Lệnh chốt sau 5–7 giây. Đây là trò chơi mô phỏng, không phải giá hoặc giao dịch thật.",
@@ -107,20 +109,25 @@ export async function settleMarketPosition(
   try {
     const wait = Math.max(0, position.settleAt - Date.now());
     if (wait) await delay(wait);
-    const exitPrice = marketPriceAt(position.market, position.settleAt);
-    let pnl = calculateLeveragedPnl(
+    const naturalExitPrice = marketPriceAt(position.market, position.settleAt);
+    const shouldWin = configuredWin(getGameSettings().marketWinRate);
+    const movement = Math.max(1, Math.abs(naturalExitPrice - position.entryPrice));
+    const winningDirection = position.side === "long" ? 1 : -1;
+    const exitPrice =
+      position.entryPrice + movement * winningDirection * (shouldWin ? 1 : -1);
+    const calculatedPnl = calculateLeveragedPnl(
       position.stake,
       position.leverage,
       position.side,
       position.entryPrice,
       exitPrice,
     );
-    let settlement = repository.adjustWalletBalance(position.senderId, pnl);
-    if (!settlement.ok) {
-      pnl = -settlement.balance;
-      settlement = repository.adjustWalletBalance(position.senderId, pnl);
-    }
-    if (!settlement.ok) throw new Error("Không thể chốt số dư vị thế");
+    const settlement = repository.settleMarketGame(
+      position.senderId,
+      calculatedPnl,
+      position.senderName,
+    );
+    const pnl = settlement.pnl;
     repository.audit(position.senderId, "market.settle", position.id, {
       groupId: position.groupId,
       side: position.side,

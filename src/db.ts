@@ -67,7 +67,57 @@ CREATE TABLE IF NOT EXISTS wallets (
   balance TEXT NOT NULL DEFAULT '0',
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS game_stats (
+  zalo_id TEXT PRIMARY KEY,
+  display_name TEXT NOT NULL DEFAULT 'Người chơi',
+  total_winnings TEXT NOT NULL DEFAULT '0',
+  net_profit TEXT NOT NULL DEFAULT '0',
+  games_played INTEGER NOT NULL DEFAULT 0,
+  games_won INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 `);
+
+function recordGameResult(
+  zaloId: string,
+  displayName: string,
+  profit: bigint,
+) {
+  const current = db
+    .prepare(
+      "SELECT total_winnings,net_profit,games_played,games_won FROM game_stats WHERE zalo_id=?",
+    )
+    .get(zaloId) as
+    | {
+        total_winnings: string;
+        net_profit: string;
+        games_played: number;
+        games_won: number;
+      }
+    | undefined;
+  const totalWinnings =
+    BigInt(current?.total_winnings ?? "0") + (profit > 0n ? profit : 0n);
+  const netProfit = BigInt(current?.net_profit ?? "0") + profit;
+  const safeName = displayName.trim().replace(/\s+/g, " ").slice(0, 80) || `Zalo ${zaloId.slice(-6)}`;
+  db.prepare(
+    `INSERT INTO game_stats(zalo_id,display_name,total_winnings,net_profit,games_played,games_won,updated_at)
+     VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP)
+     ON CONFLICT(zalo_id) DO UPDATE SET
+       display_name=excluded.display_name,
+       total_winnings=excluded.total_winnings,
+       net_profit=excluded.net_profit,
+       games_played=excluded.games_played,
+       games_won=excluded.games_won,
+       updated_at=CURRENT_TIMESTAMP`,
+  ).run(
+    zaloId,
+    safeName,
+    totalWinnings.toString(),
+    netProfit.toString(),
+    (current?.games_played ?? 0) + 1,
+    (current?.games_won ?? 0) + (profit > 0n ? 1 : 0),
+  );
+}
 
 /**
  * v3 member identity: older builds trusted profile globalId/id, which Zalo can
@@ -120,12 +170,30 @@ function mergeAliasWallets(aliases: Array<{aliasId:string;zaloId:string}>) {
   for (const { aliasId, zaloId } of aliases) {
     if (!aliasId || !zaloId || aliasId === zaloId) continue;
     const from = read.get(aliasId) as {balance:string}|undefined;
-    if (!from) continue;
-    const to = read.get(zaloId) as {balance:string}|undefined;
-    const merged = BigInt(to?.balance ?? "0") + BigInt(from.balance);
-    upsert.run(zaloId, merged.toString());
-    remove.run(aliasId);
-    log.run("system", "wallet.merge_alias", zaloId, JSON.stringify({ from: aliasId, moved: from.balance, balanceAfter: merged.toString() }));
+    if (from) {
+      const to = read.get(zaloId) as {balance:string}|undefined;
+      const merged = BigInt(to?.balance ?? "0") + BigInt(from.balance);
+      upsert.run(zaloId, merged.toString());
+      remove.run(aliasId);
+      log.run("system", "wallet.merge_alias", zaloId, JSON.stringify({ from: aliasId, moved: from.balance, balanceAfter: merged.toString() }));
+    }
+    const aliasStats = db.prepare("SELECT * FROM game_stats WHERE zalo_id=?").get(aliasId) as Record<string,unknown>|undefined;
+    if (aliasStats) {
+      const targetStats = db.prepare("SELECT * FROM game_stats WHERE zalo_id=?").get(zaloId) as Record<string,unknown>|undefined;
+      db.prepare(`INSERT INTO game_stats(zalo_id,display_name,total_winnings,net_profit,games_played,games_won,updated_at)
+        VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP)
+        ON CONFLICT(zalo_id) DO UPDATE SET display_name=excluded.display_name,total_winnings=excluded.total_winnings,
+          net_profit=excluded.net_profit,games_played=excluded.games_played,games_won=excluded.games_won,updated_at=CURRENT_TIMESTAMP`)
+        .run(
+          zaloId,
+          String(targetStats?.display_name ?? aliasStats.display_name ?? `Zalo ${zaloId.slice(-6)}`),
+          (BigInt(String(targetStats?.total_winnings ?? "0")) + BigInt(String(aliasStats.total_winnings ?? "0"))).toString(),
+          (BigInt(String(targetStats?.net_profit ?? "0")) + BigInt(String(aliasStats.net_profit ?? "0"))).toString(),
+          Number(targetStats?.games_played ?? 0) + Number(aliasStats.games_played ?? 0),
+          Number(targetStats?.games_won ?? 0) + Number(aliasStats.games_won ?? 0),
+        );
+      db.prepare("DELETE FROM game_stats WHERE zalo_id=?").run(aliasId);
+    }
   }
 }
 
@@ -258,7 +326,7 @@ export const repository = {
       return {ok:true as const,previous,balance};
     })();
   },
-  settleTaiXiu(zaloId:string,stake:bigint,won:boolean): {ok:true;previous:bigint;balance:bigint}|{ok:false;balance:bigint} {
+  settleTaiXiu(zaloId:string,stake:bigint,won:boolean,displayName=`Zalo ${zaloId.slice(-6)}`): {ok:true;previous:bigint;balance:bigint}|{ok:false;balance:bigint} {
     return db.transaction(() => {
       const row=db.prepare("SELECT balance FROM wallets WHERE zalo_id=?").get(zaloId) as {balance:string}|undefined;
       const previous=BigInt(row?.balance ?? "0");
@@ -266,8 +334,36 @@ export const repository = {
       const balance=won ? previous+stake : previous-stake;
       db.prepare(`INSERT INTO wallets(zalo_id,balance,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)
         ON CONFLICT(zalo_id) DO UPDATE SET balance=excluded.balance,updated_at=CURRENT_TIMESTAMP`).run(zaloId,balance.toString());
+      recordGameResult(zaloId,displayName,won ? stake : -stake);
       return {ok:true as const,previous,balance};
     })();
+  },
+  settleMarketGame(zaloId:string,pnl:bigint,displayName=`Zalo ${zaloId.slice(-6)}`) {
+    return db.transaction(() => {
+      const row=db.prepare("SELECT balance FROM wallets WHERE zalo_id=?").get(zaloId) as {balance:string}|undefined;
+      const previous=BigInt(row?.balance ?? "0");
+      const appliedPnl=pnl < -previous ? -previous : pnl;
+      const balance=previous+appliedPnl;
+      db.prepare(`INSERT INTO wallets(zalo_id,balance,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)
+        ON CONFLICT(zalo_id) DO UPDATE SET balance=excluded.balance,updated_at=CURRENT_TIMESTAMP`).run(zaloId,balance.toString());
+      recordGameResult(zaloId,displayName,appliedPnl);
+      return {previous,balance,pnl:appliedPnl};
+    })();
+  },
+  gameLeaderboard(limit=10) {
+    const rows=db.prepare("SELECT * FROM game_stats").all() as Array<{
+      zalo_id:string;display_name:string;total_winnings:string;net_profit:string;
+      games_played:number;games_won:number;updated_at:string;
+    }>;
+    return rows
+      .sort((a,b) => {
+        const winnings=BigInt(b.total_winnings)-BigInt(a.total_winnings);
+        if(winnings!==0n)return winnings>0n ? 1 : -1;
+        const profit=BigInt(b.net_profit)-BigInt(a.net_profit);
+        if(profit!==0n)return profit>0n ? 1 : -1;
+        return b.games_won-a.games_won;
+      })
+      .slice(0,Math.max(0,limit));
   },
   stats() {
     return {

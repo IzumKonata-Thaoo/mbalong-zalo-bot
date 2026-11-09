@@ -42,6 +42,28 @@ describe("market wallet settlement", () => {
     expect(settled.balance).toBe(repository.walletBalance("user-1"));
   });
 
+  it("credits a winning long/short result to the user's wallet", async () => {
+    repository.setSettings({ "games.market_win_rate": "100" });
+    repository.adjustWalletBalance("winner", 20_000n);
+    const opened = market.openMarketPosition({
+      groupId: "g-market",
+      senderId: "winner",
+      senderName: "Winner",
+      side: "short",
+      stake: 10_000n,
+      leverage: 20,
+      now: Date.now() - 10_000,
+    });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+
+    const settled = await market.settleMarketPosition(opened.position);
+    expect(settled.pnl).toBeGreaterThan(0n);
+    expect(repository.walletBalance("winner")).toBe(20_000n + settled.pnl);
+    expect(repository.gameLeaderboard().find((row) => row.zalo_id === "winner"))
+      .toMatchObject({ games_played: 1, games_won: 1 });
+  });
+
   it("does not append the virtual-market disclaimer to a result", () => {
     const message = market.marketResultMessage({
       id: "position-1",
