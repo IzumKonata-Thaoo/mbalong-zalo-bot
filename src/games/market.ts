@@ -166,8 +166,6 @@ export function marketResultMessage(position: SettledMarketPosition) {
     `Đòn bẩy: ${position.leverage}x`,
     `PnL: ${sign}${formatBetAmount(absolutePnl)}`,
     `Số dư mới: ${formatBetAmount(position.balance)}`,
-    "",
-    "Thị trường ảo · Không phải giao dịch thật.",
   ].join("\n");
 }
 

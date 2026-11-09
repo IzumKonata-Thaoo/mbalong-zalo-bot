@@ -41,4 +41,26 @@ describe("market wallet settlement", () => {
     expect(repository.walletBalance("user-1")).toBe(10_000n + settled.pnl);
     expect(settled.balance).toBe(repository.walletBalance("user-1"));
   });
+
+  it("does not append the virtual-market disclaimer to a result", () => {
+    const message = market.marketResultMessage({
+      id: "position-1",
+      groupId: "g-market",
+      senderId: "user-1",
+      senderName: "Trader",
+      side: "long",
+      stake: 5_000n,
+      leverage: 10,
+      entryPrice: 2_650,
+      openedAt: 1_000,
+      settleAt: 7_000,
+      market: market.currentVirtualMarket("g-market", 1_000),
+      exitPrice: 2_651,
+      pnl: 18n,
+      balance: 10_018n,
+    });
+
+    expect(message).not.toContain("Thị trường ảo");
+    expect(message).not.toContain("Không phải giao dịch thật");
+  });
 });
