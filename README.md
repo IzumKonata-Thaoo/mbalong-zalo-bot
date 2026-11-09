@@ -115,7 +115,7 @@ Các mức từ một triệu trở lên được hiển thị rút gọn, ví d
 
 ## Long/Short trên thị trường ảo
 
-Long/Short dùng chung số dư với tài xỉu. Mỗi nhóm có một đường giá XAUUSDT mô phỏng được tạo trước và giữ nhất quán trong phiên 5 giờ; phía lệnh của người chơi không làm thay đổi thị trường. Người chơi chọn thời gian chốt từ 5 giây đến 5 phút, hoặc bỏ trống để dùng 5–7 giây ngẫu nhiên. PnL dựa trên biến động giá và đòn bẩy, lỗ tối đa bằng tiền vào lệnh. Đây chỉ là trò chơi bằng điểm ảo, không phải dữ liệu hay giao dịch tài chính thật.
+Long/Short dùng chung số dư với tài xỉu. Mỗi nhóm có một đường giá XAUUSDT mô phỏng được tạo trước và giữ nhất quán trong phiên 5 giờ; phía lệnh của người chơi không làm thay đổi thị trường. Người chơi chọn khung chốt mô phỏng từ 5 giây đến 5 phút, hoặc bỏ trống để dùng 5–7 giây ngẫu nhiên. Đây là thời gian chạy bên trong phiên để lấy giá chốt và tính PnL; bot vẫn trả kết quả ngoài Zalo sau khoảng 5–7 giây. Khung dài hơn có biên độ tiềm năng lớn hơn. Lỗ tối đa bằng tiền vào lệnh. Đây chỉ là trò chơi bằng điểm ảo, không phải dữ liệu hay giao dịch tài chính thật.
 
 ```text
 @MbaLong /market
@@ -127,7 +127,7 @@ Long/Short dùng chung số dư với tài xỉu. Mỗi nhóm có một đườn
 
 Đòn bẩy nhận mọi số nguyên dương (`1x`, `100x`, `999999x` hoặc lớn hơn) và được tính bằng `BigInt`, không đặt mức tối đa. Lỗ vẫn bị giới hạn tối đa bằng tiền vào lệnh; lãi không đặt trần. `/market` gửi ảnh biểu đồ PNG 1280×720 trực tiếp lên Zalo.
 
-Tham số cuối là thời gian chốt lệnh, nhận giây (`30s`) hoặc phút (`2m`), trong khoảng 5 giây đến 5 phút. Không nhập thời gian thì bot giữ chế độ ngẫu nhiên 5–7 giây. Nếu wallet của người chơi về 0 khi vị thế còn mở, bot tự đóng vị thế ngay và thông báo trong nhóm; vị thế đó không tính thắng/thua hay nổ hũ.
+Tham số cuối là khung thời gian mô phỏng, nhận giây (`30s`) hoặc phút (`2m`), trong khoảng 5 giây đến 5 phút. Dù chọn `5m`, kết quả vẫn được trả sau 5–7 giây thực tế. Không nhập thì cả khung mô phỏng lẫn thời gian trả kết quả dùng 5–7 giây ngẫu nhiên. Nếu wallet của người chơi về 0 trong lúc bot đang xử lý lệnh, bot tự đóng vị thế ngay và thông báo trong nhóm; vị thế đó không tính thắng/thua hay nổ hũ.
 
 `/bxh` (hoặc `/top`) xếp hạng tổng tiền thắng từ tài xỉu và Long/Short. Tiền admin nạp/trừ không được tính. Dữ liệu bắt đầu tích lũy từ khi cài bản có bảng xếp hạng. Admin chỉnh tỉ lệ thắng riêng cho hai trò tại **Cấu hình → Tỉ lệ thắng trò chơi**; thay đổi có hiệu lực ngay với các ván mới.
 

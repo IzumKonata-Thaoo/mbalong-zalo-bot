@@ -26,7 +26,10 @@ export interface OpenMarketPosition {
   leverage: bigint;
   entryPrice: number;
   openedAt: number;
+  /** Real wall-clock time when the bot returns the result (always 5–7 seconds). */
   settleAt: number;
+  /** Simulated market timestamp selected by the player for price/PnL. */
+  marketCloseAt: number;
   market: VirtualMarket;
 }
 
@@ -52,8 +55,8 @@ export const marketGuide = [
   "• @MbaLong /bxh — xem bảng xếp hạng hai trò",
   "",
   "Đòn bẩy: nhập số nguyên dương bất kỳ, không giới hạn mức tối đa.",
-  "Thời gian chốt: 5s–5m (ví dụ 30s, 2m). Bỏ trống để chốt ngẫu nhiên sau 5–7 giây.",
-  "Nếu số dư về 0 khi lệnh còn mở, bot tự đóng lệnh ngay.",
+  "Khung chốt mô phỏng: 5s–5m (ví dụ 30s, 2m). Khung dài có thể tạo biên độ lớn hơn.",
+  "Bot luôn trả kết quả sau khoảng 5–7 giây. Nếu số dư về 0 lúc đang xử lý, bot tự đóng lệnh.",
   "Đây là trò chơi mô phỏng, không phải giá hoặc giao dịch thật.",
 ].join("\n");
 
@@ -104,6 +107,8 @@ export function openMarketPosition(input: {
       message: `Số dư không đủ.\n\nSố dư: ${formatBetAmount(balance)}\nTiền vào lệnh: ${formatBetAmount(input.stake)}`,
     };
   const market = currentVirtualMarket(input.groupId, now);
+  const processingDelay = randomInt(5_000, 7_001);
+  const marketDuration = input.settleAfterMs ?? processingDelay;
   const position: OpenMarketPosition = {
     id: randomUUID(),
     groupId: input.groupId,
@@ -114,7 +119,8 @@ export function openMarketPosition(input: {
     leverage: input.leverage,
     entryPrice: marketPriceAt(market, now),
     openedAt: now,
-    settleAt: now + (input.settleAfterMs ?? randomInt(5_000, 7_001)),
+    settleAt: now + processingDelay,
+    marketCloseAt: now + marketDuration,
     market,
   } as OpenMarketPosition;
   activePositions.set(key, position);
@@ -147,7 +153,10 @@ export async function settleMarketPosition(
         liquidated: true,
       };
     }
-    const naturalExitPrice = marketPriceAt(position.market, position.settleAt);
+    const naturalExitPrice = marketPriceAt(
+      position.market,
+      position.marketCloseAt,
+    );
     const settings = getGameSettings();
     const shouldWin = configuredWin(settings.marketWinRate);
     const movement = Math.max(1, Math.abs(naturalExitPrice - position.entryPrice));
@@ -173,7 +182,8 @@ export async function settleMarketPosition(
       side: position.side,
       stake: position.stake.toString(),
       leverage: position.leverage.toString(),
-      settleAfterMs: position.settleAt - position.openedAt,
+      marketDurationMs: position.marketCloseAt - position.openedAt,
+      processingDelayMs: position.settleAt - position.openedAt,
       entryPrice: position.entryPrice,
       exitPrice,
       pnl: pnl.toString(),
@@ -200,13 +210,16 @@ export function cancelMarketPosition(position: OpenMarketPosition) {
 }
 
 export function marketOpenMessage(position: OpenMarketPosition) {
-  const duration = formatSettleDuration(position.settleAt - position.openedAt);
+  const duration = formatSettleDuration(
+    position.marketCloseAt - position.openedAt,
+  );
   return [
     `${position.side === "long" ? "🟢" : "🔴"} ĐÃ MỞ ${position.side.toUpperCase()} ${position.leverage}x`,
     "",
     `Giá vào: ${formatMarketPrice(position.entryPrice)}`,
     `Tiền vào lệnh: ${formatBetAmount(position.stake)}`,
-    `Ký quỹ: Isolated · Chốt sau ${duration}`,
+    `Khung chốt mô phỏng: ${duration}`,
+    "Kết quả trả sau khoảng 5–7 giây",
   ].join("\n");
 }
 

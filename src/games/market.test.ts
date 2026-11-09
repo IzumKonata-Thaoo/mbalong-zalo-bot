@@ -39,7 +39,9 @@ describe("market wallet settlement", () => {
     });
     expect(opened.ok).toBe(true);
     if (!opened.ok) return;
-    expect(opened.position.settleAt).toBe(now + 120_000);
+    expect(opened.position.marketCloseAt).toBe(now + 120_000);
+    expect(opened.position.settleAt).toBeGreaterThanOrEqual(now + 5_000);
+    expect(opened.position.settleAt).toBeLessThanOrEqual(now + 7_000);
     expect(market.marketOpenMessage(opened.position)).toContain("2 phút");
     market.cancelMarketPosition(opened.position);
   });
@@ -152,6 +154,7 @@ describe("market wallet settlement", () => {
       entryPrice: 2_650,
       openedAt: 1_000,
       settleAt: 7_000,
+      marketCloseAt: 7_000,
       market: market.currentVirtualMarket("g-market", 1_000),
       exitPrice: 2_651,
       pnl: 18n,
