@@ -123,6 +123,7 @@ async function processMessage(message: IncomingGroupMessage, question: string) {
         side: marketCommand.side,
         stake: marketCommand.stake,
         leverage: marketCommand.leverage,
+        settleAfterMs: marketCommand.settleAfterMs,
       });
       if (!opened.ok) {
         await zaloClient.send(message.groupId, opened.message, message.raw);

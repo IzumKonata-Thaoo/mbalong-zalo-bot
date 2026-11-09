@@ -24,6 +24,50 @@ afterAll(() => {
 });
 
 describe("market wallet settlement", () => {
+  it("uses the close time selected in the command", () => {
+    repository.adjustWalletBalance("timed-user", 10_000n);
+    const now = Date.now();
+    const opened = market.openMarketPosition({
+      groupId: "g-market",
+      senderId: "timed-user",
+      senderName: "Timed User",
+      side: "long",
+      stake: 1_000n,
+      leverage: 10n,
+      settleAfterMs: 120_000,
+      now,
+    });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    expect(opened.position.settleAt).toBe(now + 120_000);
+    expect(market.marketOpenMessage(opened.position)).toContain("2 phút");
+    market.cancelMarketPosition(opened.position);
+  });
+
+  it("closes immediately without a game result when the wallet reaches zero", async () => {
+    repository.adjustWalletBalance("empty-wallet", 1_000n);
+    const opened = market.openMarketPosition({
+      groupId: "g-market",
+      senderId: "empty-wallet",
+      senderName: "Empty Wallet",
+      side: "short",
+      stake: 1_000n,
+      leverage: 10n,
+      settleAfterMs: 300_000,
+    });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    repository.adjustWalletBalance("empty-wallet", -1_000n);
+
+    const settled = await market.settleMarketPosition(opened.position);
+    expect(settled.liquidated).toBe(true);
+    expect(settled.pnl).toBe(0n);
+    expect(market.marketResultMessage(settled)).toContain("ĐÃ ĐÓNG SỚM");
+    expect(
+      repository.gameLeaderboard().some((row) => row.zalo_id === "empty-wallet"),
+    ).toBe(false);
+  });
+
   it("settles pnl into the same wallet used by tai xiu", async () => {
     repository.adjustWalletBalance("user-1", 10_000n);
     const opened = market.openMarketPosition({
@@ -32,7 +76,7 @@ describe("market wallet settlement", () => {
       senderName: "Trader",
       side: "long",
       stake: 5_000n,
-      leverage: 10,
+      leverage: 10n,
       now: Date.now() - 10_000,
     });
     expect(opened.ok).toBe(true);
@@ -54,7 +98,7 @@ describe("market wallet settlement", () => {
       senderName: "Winner",
       side: "short",
       stake: 10_000n,
-      leverage: 20,
+      leverage: 20n,
       now: Date.now() - 10_000,
     });
     expect(opened.ok).toBe(true);
@@ -80,7 +124,7 @@ describe("market wallet settlement", () => {
       senderName: "Jackpot Winner",
       side: "long",
       stake: 10_000n,
-      leverage: 10,
+      leverage: 10n,
       now: Date.now() - 10_000,
     });
     expect(opened.ok).toBe(true);
@@ -104,7 +148,7 @@ describe("market wallet settlement", () => {
       senderName: "Trader",
       side: "long",
       stake: 5_000n,
-      leverage: 10,
+      leverage: 10n,
       entryPrice: 2_650,
       openedAt: 1_000,
       settleAt: 7_000,

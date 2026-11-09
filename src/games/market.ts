@@ -4,11 +4,13 @@ import { formatBetAmount } from "./tai-xiu-rules.js";
 import { configuredWin, getGameSettings } from "./game-settings.js";
 import { resolveJackpot } from "./jackpot.js";
 import {
-  MARKET_LEVERAGES,
+  MARKET_MAX_SETTLE_MS,
+  MARKET_MIN_SETTLE_MS,
   MARKET_SESSION_MS,
   calculateLeveragedPnl,
   createVirtualMarket,
   formatMarketPrice,
+  formatSettleDuration,
   marketPriceAt,
   type MarketSide,
   type VirtualMarket,
@@ -21,7 +23,7 @@ export interface OpenMarketPosition {
   senderName: string;
   side: MarketSide;
   stake: bigint;
-  leverage: number;
+  leverage: bigint;
   entryPrice: number;
   openedAt: number;
   settleAt: number;
@@ -34,6 +36,7 @@ export interface SettledMarketPosition extends OpenMarketPosition {
   balance: bigint;
   jackpot?: boolean;
   normalPnl?: bigint;
+  liquidated?: boolean;
 }
 
 const marketCache = new Map<string, VirtualMarket>();
@@ -43,13 +46,15 @@ export const marketGuide = [
   "📈 LONG/SHORT · THỊ TRƯỜNG ẢO",
   "",
   "• @MbaLong /market — xem biểu đồ hiện tại",
-  "• @MbaLong /long 10000 10x",
-  "• @MbaLong /short 10000 20x",
+  "• @MbaLong /long 10000 10x 30s",
+  "• @MbaLong /short 10000 20x 2m",
   "• @MbaLong /sodu — xem số dư dùng chung với tài xỉu",
   "• @MbaLong /bxh — xem bảng xếp hạng hai trò",
   "",
-  `Đòn bẩy: ${MARKET_LEVERAGES.map((value) => `${value}x`).join(", ")}`,
-  "Lệnh chốt sau 5–7 giây. Đây là trò chơi mô phỏng, không phải giá hoặc giao dịch thật.",
+  "Đòn bẩy: nhập số nguyên dương bất kỳ, không giới hạn mức tối đa.",
+  "Thời gian chốt: 5s–5m (ví dụ 30s, 2m). Bỏ trống để chốt ngẫu nhiên sau 5–7 giây.",
+  "Nếu số dư về 0 khi lệnh còn mở, bot tự đóng lệnh ngay.",
+  "Đây là trò chơi mô phỏng, không phải giá hoặc giao dịch thật.",
 ].join("\n");
 
 export function currentVirtualMarket(groupId: string, now = Date.now()) {
@@ -70,7 +75,8 @@ export function openMarketPosition(input: {
   senderName: string;
   side: MarketSide;
   stake: bigint;
-  leverage: number;
+  leverage: bigint;
+  settleAfterMs?: number;
   now?: number;
 }): { ok: true; position: OpenMarketPosition } | { ok: false; message: string } {
   const now = input.now ?? Date.now();
@@ -79,8 +85,18 @@ export function openMarketPosition(input: {
     return { ok: false, message: "Bạn đang có một vị thế chờ chốt. Hãy đợi kết quả trước khi mở lệnh mới." };
   if (input.stake <= 0n)
     return { ok: false, message: "Số tiền vào lệnh phải là số nguyên dương." };
-  if (!(MARKET_LEVERAGES as readonly number[]).includes(input.leverage))
-    return { ok: false, message: `Đòn bẩy không hợp lệ. Chọn: ${MARKET_LEVERAGES.map((value) => `${value}x`).join(", ")}.` };
+  if (input.leverage <= 0n)
+    return { ok: false, message: "Đòn bẩy phải là số nguyên dương." };
+  if (
+    input.settleAfterMs !== undefined &&
+    (!Number.isSafeInteger(input.settleAfterMs) ||
+      input.settleAfterMs < MARKET_MIN_SETTLE_MS ||
+      input.settleAfterMs > MARKET_MAX_SETTLE_MS)
+  )
+    return {
+      ok: false,
+      message: "Thời gian chốt phải từ 5 giây đến 5 phút.",
+    };
   const balance = repository.walletBalance(input.senderId);
   if (balance < input.stake)
     return {
@@ -98,7 +114,7 @@ export function openMarketPosition(input: {
     leverage: input.leverage,
     entryPrice: marketPriceAt(market, now),
     openedAt: now,
-    settleAt: now + randomInt(5_000, 7_001),
+    settleAt: now + (input.settleAfterMs ?? randomInt(5_000, 7_001)),
     market,
   } as OpenMarketPosition;
   activePositions.set(key, position);
@@ -110,8 +126,27 @@ export async function settleMarketPosition(
 ): Promise<SettledMarketPosition> {
   const key = positionKey(position.groupId, position.senderId);
   try {
-    const wait = Math.max(0, position.settleAt - Date.now());
-    if (wait) await delay(wait);
+    const liquidated = await waitForSettleOrEmptyWallet(position);
+    if (liquidated) {
+      const closedAt = Date.now();
+      const exitPrice = marketPriceAt(position.market, closedAt);
+      repository.audit(position.senderId, "market.liquidated", position.id, {
+        groupId: position.groupId,
+        side: position.side,
+        stake: position.stake.toString(),
+        leverage: position.leverage.toString(),
+        openedAt: position.openedAt,
+        closedAt,
+        reason: "wallet_empty",
+      });
+      return {
+        ...position,
+        exitPrice,
+        pnl: 0n,
+        balance: 0n,
+        liquidated: true,
+      };
+    }
     const naturalExitPrice = marketPriceAt(position.market, position.settleAt);
     const settings = getGameSettings();
     const shouldWin = configuredWin(settings.marketWinRate);
@@ -137,7 +172,8 @@ export async function settleMarketPosition(
       groupId: position.groupId,
       side: position.side,
       stake: position.stake.toString(),
-      leverage: position.leverage,
+      leverage: position.leverage.toString(),
+      settleAfterMs: position.settleAt - position.openedAt,
       entryPrice: position.entryPrice,
       exitPrice,
       pnl: pnl.toString(),
@@ -164,17 +200,25 @@ export function cancelMarketPosition(position: OpenMarketPosition) {
 }
 
 export function marketOpenMessage(position: OpenMarketPosition) {
-  const seconds = ((position.settleAt - position.openedAt) / 1_000).toFixed(1);
+  const duration = formatSettleDuration(position.settleAt - position.openedAt);
   return [
     `${position.side === "long" ? "🟢" : "🔴"} ĐÃ MỞ ${position.side.toUpperCase()} ${position.leverage}x`,
     "",
     `Giá vào: ${formatMarketPrice(position.entryPrice)}`,
     `Tiền vào lệnh: ${formatBetAmount(position.stake)}`,
-    `Ký quỹ: Isolated · Chốt sau ${seconds}s`,
+    `Ký quỹ: Isolated · Chốt sau ${duration}`,
   ].join("\n");
 }
 
 export function marketResultMessage(position: SettledMarketPosition) {
+  if (position.liquidated)
+    return [
+      `⚠️ ĐÃ ĐÓNG SỚM ${position.side.toUpperCase()} ${position.leverage}x`,
+      "",
+      "Số dư đã về 0 khi lệnh còn mở.",
+      "Vị thế được đóng ngay và không tính kết quả thắng/thua.",
+      `Số dư hiện tại: ${formatBetAmount(position.balance)}`,
+    ].join("\n");
   const outcome = position.pnl > 0n ? "✅ THẮNG" : position.pnl < 0n ? "❌ THUA" : "➖ HÒA";
   const sign = position.pnl > 0n ? "+" : position.pnl < 0n ? "−" : "";
   const absolutePnl = position.pnl < 0n ? -position.pnl : position.pnl;
@@ -195,6 +239,15 @@ export function marketResultMessage(position: SettledMarketPosition) {
 
 function positionKey(groupId: string, senderId: string) {
   return `${groupId}:${senderId}`;
+}
+
+async function waitForSettleOrEmptyWallet(position: OpenMarketPosition) {
+  for (;;) {
+    if (repository.walletBalance(position.senderId) <= 0n) return true;
+    const remaining = position.settleAt - Date.now();
+    if (remaining <= 0) return false;
+    await delay(Math.min(500, remaining));
+  }
 }
 
 function delay(milliseconds: number) {

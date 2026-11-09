@@ -1,12 +1,19 @@
 export const MARKET_SESSION_MS = 5 * 60 * 60 * 1_000;
 export const MARKET_HISTORY_SECONDS = 60 * 60;
-export const MARKET_LEVERAGES = [1, 2, 3, 5, 10, 20, 25, 50, 75, 100] as const;
+export const MARKET_MIN_SETTLE_MS = 5_000;
+export const MARKET_MAX_SETTLE_MS = 5 * 60 * 1_000;
 
 export type MarketSide = "long" | "short";
 export type MarketCommand =
   | { kind: "market" }
   | { kind: "help" }
-  | { kind: "position"; side: MarketSide; stake: bigint; leverage: number }
+  | {
+      kind: "position";
+      side: MarketSide;
+      stake: bigint;
+      leverage: bigint;
+      settleAfterMs?: number;
+    }
   | { kind: "invalid" };
 
 export interface VirtualMarket {
@@ -34,17 +41,38 @@ export function parseMarketCommand(input: string): MarketCommand | null {
   const marker = text.match(/^\/(long|short)\b/i);
   if (!marker) return null;
   const rest = text.slice(marker[0].length).trim();
-  const match = rest.match(/^([1-9]\d*)\s+(?:x(\d+)|(\d+)x)$/i);
+  const match = rest.match(
+    /^([1-9]\d*)\s+(?:x(\d+)|(\d+)x)(?:\s+([1-9]\d*)\s*(s|m|giây|giay|phút|phut)?)?$/i,
+  );
   if (!match) return { kind: "invalid" };
-  const leverage = Number(match[2] ?? match[3]);
-  if (!(MARKET_LEVERAGES as readonly number[]).includes(leverage))
-    return { kind: "invalid" };
+  const leverage = BigInt(match[2] ?? match[3]!);
+  if (leverage <= 0n) return { kind: "invalid" };
+  let settleAfterMs: number | undefined;
+  if (match[4]) {
+    const value = Number(match[4]);
+    const unit = (match[5] ?? "s").toLowerCase();
+    const seconds = /^(?:m|phút|phut)$/.test(unit) ? value * 60 : value;
+    settleAfterMs = seconds * 1_000;
+    if (
+      !Number.isSafeInteger(settleAfterMs) ||
+      settleAfterMs < MARKET_MIN_SETTLE_MS ||
+      settleAfterMs > MARKET_MAX_SETTLE_MS
+    )
+      return { kind: "invalid" };
+  }
   return {
     kind: "position",
     side: marker[1]!.toLowerCase() as MarketSide,
     stake: BigInt(match[1]!),
     leverage,
+    ...(settleAfterMs ? { settleAfterMs } : {}),
   };
+}
+
+export function formatSettleDuration(milliseconds: number) {
+  const seconds = Math.round(milliseconds / 1_000);
+  if (seconds >= 60 && seconds % 60 === 0) return `${seconds / 60} phút`;
+  return `${seconds} giây`;
 }
 
 export function createVirtualMarket(groupId: string, now = Date.now()): VirtualMarket {
@@ -111,14 +139,15 @@ export function marketCandles(
 
 export function calculateLeveragedPnl(
   stake: bigint,
-  leverage: number,
+  leverage: bigint,
   side: MarketSide,
   entryPrice: number,
   exitPrice: number,
 ): bigint {
   if (stake <= 0n || entryPrice <= 0) return 0n;
   const direction = side === "long" ? 1 : -1;
-  const numerator = stake * BigInt((exitPrice - entryPrice) * direction * leverage);
+  const numerator =
+    stake * BigInt((exitPrice - entryPrice) * direction) * leverage;
   let pnl = numerator / BigInt(entryPrice);
   if (pnl === 0n && exitPrice !== entryPrice)
     pnl = (exitPrice - entryPrice) * direction > 0 ? 1n : -1n;

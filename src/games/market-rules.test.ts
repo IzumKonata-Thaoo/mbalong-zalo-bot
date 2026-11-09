@@ -13,19 +13,40 @@ describe("virtual long/short market", () => {
       kind: "position",
       side: "long",
       stake: 10000n,
-      leverage: 20,
+      leverage: 20n,
     });
     expect(parseMarketCommand("/short 5000 x10")).toEqual({
       kind: "position",
       side: "short",
       stake: 5000n,
-      leverage: 10,
+      leverage: 10n,
+    });
+    expect(parseMarketCommand("/long 10000 20x 30s")).toEqual({
+      kind: "position",
+      side: "long",
+      stake: 10000n,
+      leverage: 20n,
+      settleAfterMs: 30_000,
+    });
+    expect(parseMarketCommand("/short 5000 x10 2m")).toEqual({
+      kind: "position",
+      side: "short",
+      stake: 5000n,
+      leverage: 10n,
+      settleAfterMs: 120_000,
     });
   });
 
-  it("rejects unsupported leverage and malformed position commands", () => {
-    expect(parseMarketCommand("/long 10000 13x")).toEqual({ kind: "invalid" });
+  it("accepts unlimited positive leverage and rejects malformed commands", () => {
+    expect(parseMarketCommand("/long 10000 999999999999999999999999x")).toEqual({
+      kind: "position",
+      side: "long",
+      stake: 10000n,
+      leverage: 999999999999999999999999n,
+    });
     expect(parseMarketCommand("/short 10000")).toEqual({ kind: "invalid" });
+    expect(parseMarketCommand("/long 10000 10x 4s")).toEqual({ kind: "invalid" });
+    expect(parseMarketCommand("/long 10000 10x 6m")).toEqual({ kind: "invalid" });
   });
 
   it("keeps the same five-hour market path for every viewer in a group", () => {
@@ -38,8 +59,17 @@ describe("virtual long/short market", () => {
   });
 
   it("calculates directional leveraged pnl and caps loss at the stake", () => {
-    expect(calculateLeveragedPnl(10_000n, 10, "long", 265_000, 267_650)).toBe(1_000n);
-    expect(calculateLeveragedPnl(10_000n, 10, "short", 265_000, 267_650)).toBe(-1_000n);
-    expect(calculateLeveragedPnl(10_000n, 100, "long", 265_000, 250_000)).toBe(-10_000n);
+    expect(calculateLeveragedPnl(10_000n, 10n, "long", 265_000, 267_650)).toBe(1_000n);
+    expect(calculateLeveragedPnl(10_000n, 10n, "short", 265_000, 267_650)).toBe(-1_000n);
+    expect(calculateLeveragedPnl(10_000n, 100n, "long", 265_000, 250_000)).toBe(-10_000n);
+    expect(
+      calculateLeveragedPnl(
+        10_000n,
+        999999999999999999999999n,
+        "long",
+        265_000,
+        267_650,
+      ),
+    ).toBe(99999999999999999999999900n);
   });
 });
