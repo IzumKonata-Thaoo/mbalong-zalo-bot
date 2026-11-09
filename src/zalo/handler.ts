@@ -3,6 +3,21 @@ import { repository } from "../db.js";
 import { answerGroup, summarizeGroup } from "../ai/assistant.js";
 import { handleTaiXiu } from "../games/tai-xiu.js";
 import { parseTaiXiu } from "../games/tai-xiu-rules.js";
+import {
+  cancelMarketPosition,
+  currentVirtualMarket,
+  marketGuide,
+  marketOpenMessage,
+  marketResultMessage,
+  openMarketPosition,
+  settleMarketPosition,
+} from "../games/market.js";
+import { renderMarketImage } from "../games/market-image.js";
+import {
+  formatMarketPrice,
+  marketPriceAt,
+  parseMarketCommand,
+} from "../games/market-rules.js";
 import { handleWalletCommand } from "../games/wallet.js";
 import { parseWalletCommand } from "../games/wallet-rules.js";
 import { KeyedSerialQueue } from "../queue.js";
@@ -25,6 +40,7 @@ function messageLane(question: string, hasImage: boolean): MessageLane {
   if (hasImage) return "ai";
   if (isClearContextCommand(question)) return "ai";
   if (parseWalletCommand(question)) return "game";
+  if (parseMarketCommand(question)) return "game";
   if (parseTaiXiu(question)) return "game";
   if (parseMusicIntent(question)) return "music";
   return "ai";
@@ -60,6 +76,61 @@ async function processMessage(message: IncomingGroupMessage, question: string) {
         });
     if (walletResponse) {
       await zaloClient.send(message.groupId, walletResponse, message.raw);
+      return;
+    }
+    const marketCommand = message.imageUrl ? null : parseMarketCommand(question);
+    if (marketCommand) {
+      if (marketCommand.kind === "help" || marketCommand.kind === "invalid") {
+        await zaloClient.send(
+          message.groupId,
+          marketCommand.kind === "invalid"
+            ? `⚠️ Cú pháp chưa đúng.\n\n${marketGuide}`
+            : marketGuide,
+          message.raw,
+        );
+        return;
+      }
+      if (marketCommand.kind === "market") {
+        const now = Date.now();
+        const market = currentVirtualMarket(message.groupId, now);
+        const price = marketPriceAt(market, now);
+        const image = await renderMarketImage(market, now);
+        await zaloClient.sendImage(
+          message.groupId,
+          image,
+          `📈 XAUUSDT Virtual · ${formatMarketPrice(price)}\nThị trường ảo dùng chung trong nhóm · Phiên 5 giờ`,
+          message.raw,
+        );
+        return;
+      }
+      const opened = openMarketPosition({
+        groupId: message.groupId,
+        senderId: message.senderId,
+        senderName: message.senderName,
+        side: marketCommand.side,
+        stake: marketCommand.stake,
+        leverage: marketCommand.leverage,
+      });
+      if (!opened.ok) {
+        await zaloClient.send(message.groupId, opened.message, message.raw);
+        return;
+      }
+      try {
+        await zaloClient.send(
+          message.groupId,
+          marketOpenMessage(opened.position),
+          message.raw,
+        );
+        const settled = await settleMarketPosition(opened.position);
+        await zaloClient.send(
+          message.groupId,
+          marketResultMessage(settled),
+          message.raw,
+        );
+      } catch (error) {
+        cancelMarketPosition(opened.position);
+        throw error;
+      }
       return;
     }
     const gameResponse = message.imageUrl

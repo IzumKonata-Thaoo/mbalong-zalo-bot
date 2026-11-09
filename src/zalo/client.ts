@@ -232,6 +232,32 @@ class ZaloClient extends EventEmitter {
         ThreadType.Group,
       );
   }
+  async sendImage(
+    groupId: string,
+    image: Buffer,
+    caption: string,
+    quote?: unknown,
+  ) {
+    if (!this.api) throw new Error("Zalo chưa kết nối");
+    const normalizedQuote = normalizeZaloQuote(quote);
+    return this.api.sendMessage(
+      {
+        msg: caption,
+        attachments: {
+          data: image,
+          filename: `mbalong-market-${Date.now()}.png`,
+          metadata: {
+            totalSize: image.length,
+            width: 1280,
+            height: 720,
+          },
+        },
+        ...(normalizedQuote ? { quote: normalizedQuote } : {}),
+      },
+      groupId,
+      ThreadType.Group,
+    );
+  }
   async sendVoiceFromStream(groupId: string, sourceUrl: string) {
     if (!this.api) throw new Error("Zalo chưa kết nối");
     return withM4aPreview(sourceUrl, async (path) => {

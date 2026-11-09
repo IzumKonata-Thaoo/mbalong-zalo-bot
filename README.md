@@ -113,6 +113,19 @@ Các mức từ một triệu trở lên được hiển thị rút gọn, ví d
 @MbaLong /tx xỉu 500
 ```
 
+## Long/Short trên thị trường ảo
+
+Long/Short dùng chung số dư với tài xỉu. Mỗi nhóm có một đường giá XAUUSDT mô phỏng được tạo trước và giữ nhất quán trong phiên 5 giờ; phía lệnh của người chơi không làm thay đổi thị trường. Vị thế chốt sau ngẫu nhiên 5–7 giây, PnL dựa trên biến động giá và đòn bẩy, lỗ tối đa bằng tiền vào lệnh. Đây chỉ là trò chơi bằng điểm ảo, không phải dữ liệu hay giao dịch tài chính thật.
+
+```text
+@MbaLong /market
+@MbaLong /trade
+@MbaLong /long 10000 10x
+@MbaLong /short 5000 20x
+```
+
+Đòn bẩy hỗ trợ: `1x`, `2x`, `3x`, `5x`, `10x`, `20x`, `25x`, `50x`, `75x`, `100x`. `/market` gửi ảnh biểu đồ PNG 1280×720 trực tiếp lên Zalo.
+
 Zalo UID có trong `ZALO_ADMIN_IDS` hoặc admin thật của group được cộng/trừ số dư. Không tag thêm ai thì lệnh áp dụng cho chính admin; muốn chỉnh thành viên khác, tag người đó hoặc nhập Zalo ID:
 
 ```text

@@ -28,6 +28,7 @@
     "react": "latest",
     "react-dom": "latest",
     "react-router-dom": "latest",
+    "sharp": "0.35.5",
     "zca-js": "2.1.2",
     "zod": "latest"
   },
