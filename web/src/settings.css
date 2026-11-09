@@ -19,6 +19,17 @@
   border-radius: 13px;
   background: #091723;
 }
+.jackpot-card {
+  grid-column: 1 / -1;
+  background:
+    radial-gradient(circle at 90% 0, #e7b54b14, transparent 35%),
+    #091723;
+  border-color: #e7b54b30;
+}
+.jackpot-card .rate-title > svg,
+.jackpot-card .rate-title strong {
+  color: #efc565;
+}
 .rate-title {
   display: flex;
   align-items: center;
@@ -65,6 +76,30 @@
   padding: 9px 8px;
   text-align: center;
   outline: none;
+}
+.jackpot-amount {
+  display: grid;
+  gap: 7px;
+  margin-top: 16px;
+  color: #8ea4b6;
+  font-size: 11px;
+}
+.jackpot-amount input {
+  width: 100%;
+  background: #07131f;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: #edf6fb;
+  padding: 11px 12px;
+  outline: none;
+}
+.jackpot-amount input:focus {
+  border-color: #efc565;
+  box-shadow: 0 0 0 3px #efc56514;
+}
+.jackpot-amount small {
+  color: #5f7689;
+  font-size: 9px;
 }
 .config-heading {
   display: flex;

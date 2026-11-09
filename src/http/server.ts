@@ -39,6 +39,8 @@ const aiSettingsSchema = z.object({
 const gameSettingsSchema = z.object({
   taiXiuWinRate: z.number().int().min(0).max(100),
   marketWinRate: z.number().int().min(0).max(100),
+  jackpotRate: z.number().int().min(0).max(100),
+  jackpotAmount: z.string().regex(/^\d+$/).max(200),
 });
 const attempts = new Map<string, { count: number; reset: number }>();
 
@@ -212,7 +214,8 @@ export function createServer() {
     const parsed = gameSettingsSchema.safeParse(req.body);
     if (!parsed.success)
       return res.status(400).json({
-        error: "Tỉ lệ thắng phải là số nguyên từ 0 đến 100",
+        error:
+          "Tỉ lệ phải là số nguyên từ 0 đến 100 và tiền nổ hũ phải là số nguyên không âm",
       });
     const saved = saveGameSettings(parsed.data);
     repository.audit(req.admin!.sub, "config.games.update", "game-win-rates", saved);

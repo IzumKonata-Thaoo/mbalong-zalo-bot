@@ -326,15 +326,16 @@ export const repository = {
       return {ok:true as const,previous,balance};
     })();
   },
-  settleTaiXiu(zaloId:string,stake:bigint,won:boolean,displayName=`Zalo ${zaloId.slice(-6)}`): {ok:true;previous:bigint;balance:bigint}|{ok:false;balance:bigint} {
+  settleTaiXiu(zaloId:string,stake:bigint,won:boolean,displayName=`Zalo ${zaloId.slice(-6)}`,winProfit=stake): {ok:true;previous:bigint;balance:bigint}|{ok:false;balance:bigint} {
     return db.transaction(() => {
       const row=db.prepare("SELECT balance FROM wallets WHERE zalo_id=?").get(zaloId) as {balance:string}|undefined;
       const previous=BigInt(row?.balance ?? "0");
       if(previous<stake)return {ok:false as const,balance:previous};
-      const balance=won ? previous+stake : previous-stake;
+      const profit=won ? winProfit : -stake;
+      const balance=previous+profit;
       db.prepare(`INSERT INTO wallets(zalo_id,balance,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)
         ON CONFLICT(zalo_id) DO UPDATE SET balance=excluded.balance,updated_at=CURRENT_TIMESTAMP`).run(zaloId,balance.toString());
-      recordGameResult(zaloId,displayName,won ? stake : -stake);
+      recordGameResult(zaloId,displayName,profit);
       return {ok:true as const,previous,balance};
     })();
   },

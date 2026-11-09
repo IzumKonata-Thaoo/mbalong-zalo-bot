@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto";
 import { repository } from "../db.js";
 import { formatBetAmount } from "./tai-xiu-rules.js";
 import { configuredWin, getGameSettings } from "./game-settings.js";
+import { resolveJackpot } from "./jackpot.js";
 import {
   MARKET_LEVERAGES,
   MARKET_SESSION_MS,
@@ -31,6 +32,8 @@ export interface SettledMarketPosition extends OpenMarketPosition {
   exitPrice: number;
   pnl: bigint;
   balance: bigint;
+  jackpot?: boolean;
+  normalPnl?: bigint;
 }
 
 const marketCache = new Map<string, VirtualMarket>();
@@ -110,7 +113,8 @@ export async function settleMarketPosition(
     const wait = Math.max(0, position.settleAt - Date.now());
     if (wait) await delay(wait);
     const naturalExitPrice = marketPriceAt(position.market, position.settleAt);
-    const shouldWin = configuredWin(getGameSettings().marketWinRate);
+    const settings = getGameSettings();
+    const shouldWin = configuredWin(settings.marketWinRate);
     const movement = Math.max(1, Math.abs(naturalExitPrice - position.entryPrice));
     const winningDirection = position.side === "long" ? 1 : -1;
     const exitPrice =
@@ -122,9 +126,10 @@ export async function settleMarketPosition(
       position.entryPrice,
       exitPrice,
     );
+    const jackpot = resolveJackpot(calculatedPnl, settings);
     const settlement = repository.settleMarketGame(
       position.senderId,
-      calculatedPnl,
+      jackpot.profit,
       position.senderName,
     );
     const pnl = settlement.pnl;
@@ -136,9 +141,18 @@ export async function settleMarketPosition(
       entryPrice: position.entryPrice,
       exitPrice,
       pnl: pnl.toString(),
+      normalPnl: calculatedPnl.toString(),
+      jackpot: jackpot.hit,
       balanceAfter: settlement.balance.toString(),
     });
-    return { ...position, exitPrice, pnl, balance: settlement.balance };
+    return {
+      ...position,
+      exitPrice,
+      pnl,
+      balance: settlement.balance,
+      jackpot: jackpot.hit,
+      normalPnl: calculatedPnl,
+    };
   } finally {
     if (activePositions.get(key)?.id === position.id) activePositions.delete(key);
   }
@@ -171,6 +185,9 @@ export function marketResultMessage(position: SettledMarketPosition) {
     `Giá vào: ${formatMarketPrice(position.entryPrice)}`,
     `Giá chốt: ${formatMarketPrice(position.exitPrice)} ${priceDirection}`,
     `Đòn bẩy: ${position.leverage}x`,
+    ...(position.jackpot
+      ? [`💥 NỔ HŨ · Thưởng ${formatBetAmount(position.pnl)}`]
+      : []),
     `PnL: ${sign}${formatBetAmount(absolutePnl)}`,
     `Số dư mới: ${formatBetAmount(position.balance)}`,
   ].join("\n");

@@ -7,6 +7,7 @@ import {
   resolveTaiXiu,
 } from "./tai-xiu-rules.js";
 import { configuredWin, getGameSettings } from "./game-settings.js";
+import { resolveJackpot } from "./jackpot.js";
 
 export function rollDice() {
   return [randomInt(1, 7), randomInt(1, 7), randomInt(1, 7)] as [
@@ -37,14 +38,17 @@ export function handleTaiXiu(
   if (command.amount <= 0n) return "Mức cược phải là số nguyên dương hợp lệ.";
   if (currentBalance < command.amount)
     return `Số dư không đủ.\n\nSố dư: ${formatBetAmount(currentBalance)}\nMức cược: ${formatBetAmount(command.amount)}`;
-  const won = configuredWin(getGameSettings().taiXiuWinRate);
+  const settings = getGameSettings();
+  const won = configuredWin(settings.taiXiuWinRate);
   const dice = rollDiceForResult(command.choice, won),
     outcome = resolveTaiXiu(dice);
+  const jackpot = resolveJackpot(won ? command.amount : -command.amount, settings);
   const settlement = repository.settleTaiXiu(
     senderId,
     command.amount,
     won,
     senderName,
+    jackpot.profit,
   );
   if (!settlement.ok)
     return `Số dư không đủ. Số dư hiện tại: ${formatBetAmount(settlement.balance)}.`;
@@ -55,5 +59,5 @@ export function handleTaiXiu(
         ? "TÀI"
         : "XỈU";
   const faces = ["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
-  return `🎲 TÀI XỈU · KẾT QUẢ\n\n${dice.map((d) => `${faces[d] ?? "🎲"} ${d}`).join("  ")}\nTổng: ${dice[0] + dice[1] + dice[2]} · ${label}\n\n${won ? "✅ THẮNG" : "❌ THUA"} · Mức cược ${formatBetAmount(command.amount)}\nBiến động: ${won ? "+" : "−"}${formatBetAmount(command.amount)}\nSố dư mới: ${formatBetAmount(settlement.balance)}`;
+  return `🎲 TÀI XỈU · KẾT QUẢ\n\n${dice.map((d) => `${faces[d] ?? "🎲"} ${d}`).join("  ")}\nTổng: ${dice[0] + dice[1] + dice[2]} · ${label}\n\n${won ? "✅ THẮNG" : "❌ THUA"} · Mức cược ${formatBetAmount(command.amount)}${jackpot.hit ? `\n💥 NỔ HŨ · Thưởng ${formatBetAmount(jackpot.profit)}` : ""}\nBiến động: ${won ? "+" : "−"}${formatBetAmount(won ? jackpot.profit : command.amount)}\nSố dư mới: ${formatBetAmount(settlement.balance)}`;
 }

@@ -24,6 +24,7 @@ import {
   Dices,
   TrendingUp,
   Trophy,
+  Gem,
 } from "lucide-react";
 import { api } from "./api";
 
@@ -739,6 +740,8 @@ function SettingsPage() {
   const [busy, setBusy] = useState(false);
   const [taiXiuWinRate, setTaiXiuWinRate] = useState(50);
   const [marketWinRate, setMarketWinRate] = useState(50);
+  const [jackpotRate, setJackpotRate] = useState(1);
+  const [jackpotAmount, setJackpotAmount] = useState("1000000");
   const [gameBusy, setGameBusy] = useState(false);
   const [gameMsg, setGameMsg] = useState("");
   const [gameError, setGameError] = useState("");
@@ -751,6 +754,8 @@ function SettingsPage() {
       setSystemPrompt(data.ai.systemPrompt ?? "");
       setTaiXiuWinRate(data.games?.taiXiuWinRate ?? 50);
       setMarketWinRate(data.games?.marketWinRate ?? 50);
+      setJackpotRate(data.games?.jackpotRate ?? 1);
+      setJackpotAmount(data.games?.jackpotAmount ?? "1000000");
     });
   }, []);
   if (!cfg) return <PageLoader />;
@@ -796,15 +801,27 @@ function SettingsPage() {
     setGameMsg("");
     setGameError("");
     try {
-      const saved = await api<{ taiXiuWinRate: number; marketWinRate: number }>(
+      const saved = await api<{
+        taiXiuWinRate: number;
+        marketWinRate: number;
+        jackpotRate: number;
+        jackpotAmount: string;
+      }>(
         "/config/games",
         {
           method: "PUT",
-          body: JSON.stringify({ taiXiuWinRate, marketWinRate }),
+          body: JSON.stringify({
+            taiXiuWinRate,
+            marketWinRate,
+            jackpotRate,
+            jackpotAmount,
+          }),
         },
       );
       setTaiXiuWinRate(saved.taiXiuWinRate);
       setMarketWinRate(saved.marketWinRate);
+      setJackpotRate(saved.jackpotRate);
+      setJackpotAmount(saved.jackpotAmount);
       setCfg({ ...cfg, games: saved });
       setGameMsg("Đã áp dụng tỉ lệ thắng cho các ván mới.");
     } catch (e) {
@@ -914,8 +931,8 @@ function SettingsPage() {
             <Trophy />
           </div>
           <div>
-            <h3>Tỉ lệ thắng trò chơi</h3>
-            <p>Áp dụng cho từng ván mới; số dư dùng chung giữa cả hai trò.</p>
+            <h3>Trò chơi & nổ hũ</h3>
+            <p>Tỉ lệ và tiền thưởng áp dụng ngay cho các ván mới.</p>
           </div>
           <span className="configured">Đang hoạt động</span>
         </div>
@@ -974,11 +991,54 @@ function SettingsPage() {
               />
             </div>
           </section>
+          <section className="rate-card jackpot-card">
+            <div className="rate-title">
+              <Gem />
+              <div>
+                <b>Nổ hũ dùng chung</b>
+                <small>Quay sau khi thắng Tài xỉu hoặc Long / Short</small>
+              </div>
+              <strong>{jackpotRate}%</strong>
+            </div>
+            <div className="rate-inputs">
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={jackpotRate}
+                onChange={(e) => setJackpotRate(Number(e.target.value))}
+              />
+              <input
+                aria-label="Tỉ lệ nổ hũ"
+                type="number"
+                min="0"
+                max="100"
+                value={jackpotRate}
+                onChange={(e) => setJackpotRate(Number(e.target.value))}
+              />
+            </div>
+            <label className="jackpot-amount">
+              Tiền thưởng khi nổ hũ
+              <input
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={200}
+                value={jackpotAmount}
+                onChange={(e) =>
+                  setJackpotAmount(e.target.value.replace(/\D/g, ""))
+                }
+                placeholder="1000000"
+              />
+              <small>
+                Nếu thấp hơn tiền thắng bình thường, bot tự trả gấp đôi tiền thắng.
+              </small>
+            </label>
+          </section>
         </div>
         {gameError && <div className="error">{gameError}</div>}
         {gameMsg && <div className="save-message">{gameMsg}</div>}
         <button className="save-config" disabled={gameBusy}>
-          {gameBusy ? "Đang lưu…" : "Lưu tỉ lệ thắng"}
+          {gameBusy ? "Đang lưu…" : "Lưu cấu hình trò chơi"}
           <ArrowRight />
         </button>
       </form>
@@ -1149,7 +1209,7 @@ const ACTION_NAMES: Record<string, string> = {
   "group.disable": "Tắt phản hồi nhóm",
   "member.add": "Mời thành viên",
   "member.remove": "Xóa thành viên",
-  "config.games.update": "Cập nhật tỉ lệ thắng",
+  "config.games.update": "Cập nhật cấu hình trò chơi",
 };
 const actionName = (s: string) => ACTION_NAMES[s] ?? s;
 const statusName = (s: string) =>

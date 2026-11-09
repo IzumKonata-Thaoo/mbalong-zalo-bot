@@ -129,6 +129,8 @@ Long/Short dùng chung số dư với tài xỉu. Mỗi nhóm có một đườn
 
 `/bxh` (hoặc `/top`) xếp hạng tổng tiền thắng từ tài xỉu và Long/Short. Tiền admin nạp/trừ không được tính. Dữ liệu bắt đầu tích lũy từ khi cài bản có bảng xếp hạng. Admin chỉnh tỉ lệ thắng riêng cho hai trò tại **Cấu hình → Tỉ lệ thắng trò chơi**; thay đổi có hiệu lực ngay với các ván mới.
 
+Cả hai trò dùng chung tính năng nổ hũ. Admin cấu hình số tiền hũ và tỉ lệ nổ trong cùng trang. Hũ chỉ được quay sau khi người chơi đã thắng: nếu nổ, bot trả số tiền hũ đã đặt; nếu số tiền hũ thấp hơn tiền thắng bình thường, tiền thưởng được nâng thành gấp đôi tiền thắng bình thường. Mặc định là `1%` và `1 triệu`; đặt tỉ lệ `0%` để tắt.
+
 Zalo UID có trong `ZALO_ADMIN_IDS` hoặc admin thật của group được cộng/trừ số dư. Không tag thêm ai thì lệnh áp dụng cho chính admin; muốn chỉnh thành viên khác, tag người đó hoặc nhập Zalo ID:
 
 ```text
