@@ -145,6 +145,8 @@ Admin còn có thể cấu hình **Hũ cháy ví** với tỉ lệ riêng. Hũ n
 
 `/choicho` mở một vị thế chạy nền trên XAU, BTC hoặc ETH. Mỗi giây, PnL mới phát sinh được cộng hoặc trừ trực tiếp vào wallet. Mỗi người chỉ có một vị thế liên tục; bot tự đóng khi chạm stop loss, take profit hoặc khi số dư về 0.
 
+Đòn bẩy của `/choicho` nhận từ `1x` đến tối đa `1000x`. Lệnh nhập từ `1001x` trở lên sẽ bị từ chối.
+
 ```text
 @MbaLong /choicho btc long 10x sl 0.5x tp 2x
 @MbaLong /choicho eth short 20x sl 0.7x tp 1.5x

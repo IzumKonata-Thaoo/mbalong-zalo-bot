@@ -25,6 +25,15 @@ afterAll(() => {
 });
 
 describe("continuous market wallet", () => {
+  it("accepts 1000x and rejects leverage above the /choicho limit", () => {
+    expect(
+      continuous.parseContinuousMarketCommand("/choicho btc long 1000x"),
+    ).toMatchObject({ kind: "open", leverage: 1000n });
+    expect(
+      continuous.parseContinuousMarketCommand("/choicho btc long 1001x"),
+    ).toEqual({ kind: "invalid" });
+  });
+
   it("adds, subtracts and caps continuous PnL directly in the wallet", () => {
     repository.adjustWalletBalance("wallet-player", 10_000n);
     expect(

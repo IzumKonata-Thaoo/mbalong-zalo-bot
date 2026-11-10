@@ -58,6 +58,7 @@ type CloseReason = "manual" | "stop_loss" | "take_profit" | "liquidated";
 
 const positions = new Map<string, ContinuousPosition>();
 const TICK_MS = 1_000;
+export const CONTINUOUS_MAX_LEVERAGE = 1_000n;
 
 export const continuousMarketGuide = [
   "♾️ CHƠI LONG/SHORT LIÊN TỤC",
@@ -67,6 +68,7 @@ export const continuousMarketGuide = [
   "• @MbaLong /lenh — xem vị thế và PnL hiện tại",
   "• @MbaLong /chot — đóng vị thế thủ công",
   "",
+  "Đòn bẩy /choicho: từ 1x đến tối đa 1000x.",
   "SL/TP tính theo số dư lúc mở. Ví dụ SL 0.5x đóng khi còn 50%, TP 2x đóng khi số dư gấp đôi.",
   "PnL được cộng hoặc trừ trực tiếp vào số dư mỗi giây. Số dư về 0 thì cháy ví và tự đóng.",
 ].join("\n");
@@ -91,7 +93,8 @@ export function parseContinuousMarketCommand(
   const leverageMatch = leverageToken.match(/^(?:x(\d+)|(\d+)x)$/);
   if (!leverageMatch) return { kind: "invalid" };
   const leverage = BigInt(leverageMatch[1] ?? leverageMatch[2]!);
-  if (leverage <= 0n) return { kind: "invalid" };
+  if (leverage <= 0n || leverage > CONTINUOUS_MAX_LEVERAGE)
+    return { kind: "invalid" };
 
   let stopLoss: BalanceRatio | undefined;
   let takeProfit: BalanceRatio | undefined;
@@ -134,6 +137,11 @@ export function openContinuousPosition(input: {
   takeProfit?: BalanceRatio;
   notify: (message: string) => Promise<void>;
 }) {
+  if (input.leverage <= 0n || input.leverage > CONTINUOUS_MAX_LEVERAGE)
+    return {
+      ok: false as const,
+      message: "Đòn bẩy /choicho phải từ 1x đến tối đa 1000x.",
+    };
   if (positions.has(input.senderId))
     return { ok: false as const, message: "Bạn đang có một vị thế /choicho. Dùng /lenh để xem hoặc /chot để đóng." };
   const initialBalance = repository.walletBalance(input.senderId);
