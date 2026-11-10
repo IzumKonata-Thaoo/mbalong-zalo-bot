@@ -101,3 +101,48 @@ describe("/nap and /tru", () => {
     );
   });
 });
+
+describe("/chuyen", () => {
+  it("atomically subtracts the sender and credits the tagged recipient", async () => {
+    repository.adjustWalletBalance("sender-transfer", 5000n);
+    const content = "@MbaLong @Lan /chuyen 3000";
+    const reply = await handleWalletCommand(
+      message({
+        senderId: "sender-transfer",
+        senderIds: ["sender-transfer"],
+        senderName: "Người gửi",
+        content,
+        mentions: [
+          { uid: "9000000009", pos: 0, len: 8 },
+          { uid: "recipient-transfer", pos: 9, len: 4 },
+        ],
+      }),
+      "@Lan /chuyen 3000",
+      deps(false),
+    );
+    expect(reply).toContain("CHUYỂN TIỀN THÀNH CÔNG");
+    expect(repository.walletBalance("sender-transfer")).toBe(2000n);
+    expect(repository.walletBalance("recipient-transfer")).toBe(3000n);
+  });
+
+  it("does not change either wallet when the sender lacks funds", async () => {
+    repository.adjustWalletBalance("sender-poor", 100n);
+    repository.adjustWalletBalance("recipient-safe", 700n);
+    const reply = await handleWalletCommand(
+      message({
+        senderId: "sender-poor",
+        senderIds: ["sender-poor"],
+        content: "@MbaLong @Lan /chuyen 500",
+        mentions: [
+          { uid: "9000000009", pos: 0, len: 8 },
+          { uid: "recipient-safe", pos: 9, len: 4 },
+        ],
+      }),
+      "@Lan /chuyen 500",
+      deps(false),
+    );
+    expect(reply).toContain("Số dư không đủ");
+    expect(repository.walletBalance("sender-poor")).toBe(100n);
+    expect(repository.walletBalance("recipient-safe")).toBe(700n);
+  });
+});

@@ -326,6 +326,26 @@ export const repository = {
       return {ok:true as const,previous,balance};
     })();
   },
+  transferWalletBalance(fromId:string,toId:string,amount:bigint):
+    | {ok:true;senderPrevious:bigint;senderBalance:bigint;recipientPrevious:bigint;recipientBalance:bigint}
+    | {ok:false;reason:"invalid"|"same_account"|"insufficient";senderBalance:bigint} {
+    return db.transaction(() => {
+      const senderRow=db.prepare("SELECT balance FROM wallets WHERE zalo_id=?").get(fromId) as {balance:string}|undefined;
+      const senderPrevious=BigInt(senderRow?.balance ?? "0");
+      if(amount<=0n)return {ok:false as const,reason:"invalid" as const,senderBalance:senderPrevious};
+      if(fromId===toId)return {ok:false as const,reason:"same_account" as const,senderBalance:senderPrevious};
+      if(senderPrevious<amount)return {ok:false as const,reason:"insufficient" as const,senderBalance:senderPrevious};
+      const recipientRow=db.prepare("SELECT balance FROM wallets WHERE zalo_id=?").get(toId) as {balance:string}|undefined;
+      const recipientPrevious=BigInt(recipientRow?.balance ?? "0");
+      const senderBalance=senderPrevious-amount;
+      const recipientBalance=recipientPrevious+amount;
+      const upsert=db.prepare(`INSERT INTO wallets(zalo_id,balance,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)
+        ON CONFLICT(zalo_id) DO UPDATE SET balance=excluded.balance,updated_at=CURRENT_TIMESTAMP`);
+      upsert.run(fromId,senderBalance.toString());
+      upsert.run(toId,recipientBalance.toString());
+      return {ok:true as const,senderPrevious,senderBalance,recipientPrevious,recipientBalance};
+    })();
+  },
   wipeWalletBalance(zaloId:string) {
     return db.transaction(() => {
       const row=db.prepare("SELECT balance FROM wallets WHERE zalo_id=?").get(zaloId) as {balance:string}|undefined;

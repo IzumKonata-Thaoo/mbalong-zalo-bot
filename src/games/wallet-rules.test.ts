@@ -32,4 +32,16 @@ describe("wallet commands", () => {
       amount: 2000n,
     });
   });
+
+  it("parses transfers by tag or explicit Zalo ID", () => {
+    expect(parseWalletCommand("@Lan /chuyen 2500")).toEqual({
+      kind: "transfer",
+      amount: 2500n,
+    });
+    expect(parseWalletCommand("/chuyen 123456789 3000")).toEqual({
+      kind: "transfer",
+      explicitTargetId: "123456789",
+      amount: 3000n,
+    });
+  });
 });

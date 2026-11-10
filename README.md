@@ -104,6 +104,8 @@ Xoá ngữ cảnh (bộ nhớ hội thoại và bản tóm tắt của nhóm) đ
 
 ## Trò chơi tài xỉu
 
+Người chơi có thể chuyển số dư cho thành viên khác trong cùng nhóm bằng `@MbaLong @NgườiNhận /chuyen 10000` hoặc `@MbaLong /chuyen ZALO_ID 10000`. Việc trừ ví người gửi và cộng ví người nhận diễn ra trong cùng một giao dịch database; nếu không đủ tiền thì cả hai ví đều không thay đổi.
+
 Số tiền cược và số dư được lưu chính xác theo Zalo UID bằng chuỗi số nguyên trong SQLite; bot dùng `BigInt` nên không giới hạn bởi kiểu số JavaScript và không dùng đơn vị tiền tệ. Người chơi phải có đủ số dư trước khi cược. Thắng được cộng đúng một lần mức cược, thua hoặc ra bộ ba bị trừ mức cược.
 Các mức từ một triệu trở lên được hiển thị rút gọn, ví dụ `1 triệu`, `1,5 triệu`, `2 tỷ`.
 
