@@ -150,6 +150,8 @@ Cả hai trò dùng chung tính năng nổ hũ. Admin cấu hình số tiền h�
 
 SL/TP là hệ số của số dư lúc mở. `sl 0.5x` nghĩa là đóng khi số dư còn 50%; `tp 2x` nghĩa là đóng khi số dư đạt gấp đôi. Có thể bỏ SL hoặc TP. Khi cháy ví, bot gửi thông báo và đóng vị thế ngay.
 
+Khi chưa chạm SL/TP, bot gửi cảnh báo một lần tại các mốc giảm còn 75%, 50%, 25% hoặc tăng lên 1,25x, 1,5x, 2x, 3x, 5x, 10x, 20x, 50x và 100x. Người chơi có thể dùng `/chot` ngay sau cảnh báo. Timer và cập nhật wallet dừng hẳn khi vị thế đã đóng.
+
 Zalo UID có trong `ZALO_ADMIN_IDS` hoặc admin thật của group được cộng/trừ số dư. Không tag thêm ai thì lệnh áp dụng cho chính admin; muốn chỉnh thành viên khác, tag người đó hoặc nhập Zalo ID:
 
 ```text

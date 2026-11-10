@@ -48,6 +48,7 @@ interface ContinuousPosition {
   stopLoss?: BalanceRatio;
   takeProfit?: BalanceRatio;
   timer?: NodeJS.Timeout;
+  alertedMilestones: Set<string>;
   notify: (message: string) => Promise<void>;
 }
 
@@ -148,6 +149,7 @@ export function openContinuousPosition(input: {
     entryPrice,
     lastPrice: entryPrice,
     openedAt: now,
+    alertedMilestones: new Set(),
   };
   positions.set(input.senderId, position);
   scheduleTick(position);
@@ -199,16 +201,12 @@ async function tickPosition(position: ContinuousPosition) {
       position.lastPrice,
       currentPrice,
     );
-    const appliedPnl = requestedPnl < -currentBalance ? -currentBalance : requestedPnl;
-    const changed = repository.adjustWalletBalance(position.senderId, appliedPnl);
-    if (!changed.ok) {
-      repository.adjustWalletBalance(position.senderId, -currentBalance);
-      position.balance = 0n;
-      position.cumulativePnl -= currentBalance;
-    } else {
-      position.balance = changed.balance;
-      position.cumulativePnl += appliedPnl;
-    }
+    const changed = applyContinuousWalletPnl(
+      position.senderId,
+      requestedPnl,
+    );
+    position.balance = changed.balance;
+    position.cumulativePnl += changed.pnl;
     position.lastPrice = currentPrice;
 
     if (position.balance <= 0n) {
@@ -231,12 +229,30 @@ async function tickPosition(position: ContinuousPosition) {
       await finishPosition(position, "take_profit", true);
       return;
     }
+    const alert = nextBalanceAlert(position);
+    if (alert) {
+      await position.notify(alert);
+      if (positions.get(position.senderId)?.id !== position.id) return;
+    }
     scheduleTick(position);
   } catch (error) {
     console.error("Continuous market tick error", error);
     if (positions.get(position.senderId)?.id === position.id)
       scheduleTick(position);
   }
+}
+
+/** Applies one continuous PnL tick to the real wallet and caps a loss at zero. */
+export function applyContinuousWalletPnl(
+  senderId: string,
+  requestedPnl: bigint,
+) {
+  const currentBalance = repository.walletBalance(senderId);
+  const pnl = requestedPnl < -currentBalance ? -currentBalance : requestedPnl;
+  const changed = repository.adjustWalletBalance(senderId, pnl);
+  if (!changed.ok)
+    throw new Error("Không thể cập nhật số dư /choicho");
+  return { pnl, previous: changed.previous, balance: changed.balance };
 }
 
 function finishPosition(
@@ -315,6 +331,76 @@ function closeMessage(position: ContinuousPosition, reason: CloseReason) {
     `PnL: ${sign}${formatBetAmount(pnl)}`,
     `Số dư mới: ${formatBetAmount(position.balance)}`,
   ].join("\n");
+}
+
+function nextBalanceAlert(position: ContinuousPosition) {
+  const milestone = detectBalanceMilestone(
+    position.initialBalance,
+    position.balance,
+    position.alertedMilestones,
+  );
+  return milestone
+    ? balanceAlertMessage(position, milestone.direction, milestone.level)
+    : null;
+}
+
+export function detectBalanceMilestone(
+  initialBalance: bigint,
+  balance: bigint,
+  alertedMilestones: Set<string>,
+) {
+  const lossLevels = [75n, 50n, 25n];
+  const profitLevels = [125n, 150n, 200n, 300n, 500n, 1_000n, 2_000n, 5_000n, 10_000n];
+  const crossedLosses = lossLevels.filter(
+    (level) =>
+      balance * 100n <= initialBalance * level &&
+      !alertedMilestones.has(`loss:${level}`),
+  );
+  if (crossedLosses.length) {
+    for (const level of crossedLosses)
+      alertedMilestones.add(`loss:${level}`);
+    const level = crossedLosses.at(-1)!;
+    return { direction: "loss" as const, level };
+  }
+  const crossedProfits = profitLevels.filter(
+    (level) =>
+      balance * 100n >= initialBalance * level &&
+      !alertedMilestones.has(`profit:${level}`),
+  );
+  if (crossedProfits.length) {
+    for (const level of crossedProfits)
+      alertedMilestones.add(`profit:${level}`);
+    const level = crossedProfits.at(-1)!;
+    return { direction: "profit" as const, level };
+  }
+  return null;
+}
+
+function balanceAlertMessage(
+  position: ContinuousPosition,
+  direction: "loss" | "profit",
+  level: bigint,
+) {
+  const sign = position.cumulativePnl >= 0n ? "+" : "−";
+  const pnl = position.cumulativePnl < 0n ? -position.cumulativePnl : position.cumulativePnl;
+  const levelText =
+    level < 100n
+      ? `còn ${level}% số dư lúc mở`
+      : `đạt ${formatRatioPercent(level)} số dư lúc mở`;
+  return [
+    `${direction === "loss" ? "⚠️ CẢNH BÁO GIẢM MẠNH" : "🚀 CẢNH BÁO TĂNG MẠNH"} · ${marketSymbolLabel(position.symbol)}`,
+    "",
+    `Số dư đã ${levelText}.`,
+    `PnL vị thế: ${sign}${formatBetAmount(pnl)}`,
+    `Số dư hiện tại: ${formatBetAmount(position.balance)}`,
+    "Dùng @MbaLong /chot để chốt hoặc /lenh để xem chi tiết.",
+  ].join("\n");
+}
+
+function formatRatioPercent(percent: bigint) {
+  const whole = percent / 100n;
+  const remainder = percent % 100n;
+  return remainder ? `${whole},${remainder.toString().padStart(2, "0").replace(/0+$/, "")}x` : `${whole}x`;
 }
 
 function parseRatio(value: string): BalanceRatio | null {
