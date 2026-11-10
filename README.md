@@ -115,13 +115,15 @@ Các mức từ một triệu trở lên được hiển thị rút gọn, ví d
 
 ## Long/Short trên thị trường ảo
 
-Long/Short dùng chung số dư với tài xỉu. Mỗi nhóm có một đường giá XAUUSDT mô phỏng được tạo trước và giữ nhất quán trong phiên 5 giờ; phía lệnh của người chơi không làm thay đổi thị trường. Người chơi chọn khung chốt mô phỏng từ 5 giây đến 5 phút, hoặc bỏ trống để dùng 5–7 giây ngẫu nhiên. Đây là thời gian chạy bên trong phiên để lấy giá chốt và tính PnL; bot vẫn trả kết quả ngoài Zalo sau khoảng 5–7 giây. Khung dài hơn có biên độ tiềm năng lớn hơn. Lỗ tối đa bằng tiền vào lệnh. Đây chỉ là trò chơi bằng điểm ảo, không phải dữ liệu hay giao dịch tài chính thật.
+Long/Short dùng chung số dư với tài xỉu. Mỗi nhóm có các đường giá XAUUSDT, BTCUSDT và ETHUSDT mô phỏng được tạo trước, giữ nhất quán trong phiên 5 giờ; phía lệnh của người chơi không làm thay đổi thị trường. Người chơi chọn khung chốt mô phỏng từ 5 giây đến 5 phút, hoặc bỏ trống để dùng 5–7 giây ngẫu nhiên. Đây là thời gian chạy bên trong phiên để lấy giá chốt và tính PnL; bot vẫn trả kết quả ngoài Zalo sau khoảng 5–7 giây. Khung dài hơn có biên độ tiềm năng lớn hơn. Lỗ tối đa bằng tiền vào lệnh. Đây chỉ là trò chơi bằng điểm ảo, không phải dữ liệu hay giao dịch tài chính thật.
 
 ```text
-@MbaLong /market
+@MbaLong /market xau
+@MbaLong /market btc
+@MbaLong /market eth
 @MbaLong /trade
-@MbaLong /long 10000 10x 30s
-@MbaLong /short 5000 20x 2m
+@MbaLong /long btc 10000 10x 30s
+@MbaLong /short eth 5000 20x 2m
 @MbaLong /bxh
 ```
 
@@ -134,6 +136,19 @@ Tham số cuối là khung thời gian mô phỏng, nhận giây (`30s`) hoặc 
 `/bxh` (hoặc `/top`) xếp hạng tổng tiền thắng từ tài xỉu và Long/Short. Tiền admin nạp/trừ không được tính. Dữ liệu bắt đầu tích lũy từ khi cài bản có bảng xếp hạng. Admin chỉnh tỉ lệ thắng riêng cho hai trò tại **Cấu hình → Tỉ lệ thắng trò chơi**; thay đổi có hiệu lực ngay với các ván mới.
 
 Cả hai trò dùng chung tính năng nổ hũ. Admin cấu hình số tiền hũ và tỉ lệ nổ trong cùng trang. Hũ chỉ được quay sau khi người chơi đã thắng: nếu nổ, bot trả số tiền hũ đã đặt; nếu số tiền hũ thấp hơn tiền thắng bình thường, tiền thưởng được nâng thành gấp đôi tiền thắng bình thường. Mặc định là `1%` và `1 triệu`; đặt tỉ lệ `0%` để tắt.
+
+### Chơi Long/Short liên tục
+
+`/choicho` mở một vị thế chạy nền trên XAU, BTC hoặc ETH. Mỗi giây, PnL mới phát sinh được cộng hoặc trừ trực tiếp vào wallet. Mỗi người chỉ có một vị thế liên tục; bot tự đóng khi chạm stop loss, take profit hoặc khi số dư về 0.
+
+```text
+@MbaLong /choicho btc long 10x sl 0.5x tp 2x
+@MbaLong /choicho eth short 20x sl 0.7x tp 1.5x
+@MbaLong /lenh
+@MbaLong /chot
+```
+
+SL/TP là hệ số của số dư lúc mở. `sl 0.5x` nghĩa là đóng khi số dư còn 50%; `tp 2x` nghĩa là đóng khi số dư đạt gấp đôi. Có thể bỏ SL hoặc TP. Khi cháy ví, bot gửi thông báo và đóng vị thế ngay.
 
 Zalo UID có trong `ZALO_ADMIN_IDS` hoặc admin thật của group được cộng/trừ số dư. Không tag thêm ai thì lệnh áp dụng cho chính admin; muốn chỉnh thành viên khác, tag người đó hoặc nhập Zalo ID:
 

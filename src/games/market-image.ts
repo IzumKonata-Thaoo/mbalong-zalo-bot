@@ -1,6 +1,7 @@
 import sharp from "sharp";
 import {
   formatMarketPrice,
+  marketSymbolLabel,
   marketCandles,
   marketPriceAt,
   type VirtualMarket,
@@ -85,13 +86,13 @@ export async function renderMarketImage(
     <rect width="1280" height="78" fill="#0d1420"/>
     <line x1="0" y1="78" x2="1280" y2="78" stroke="#293446"/>
     <circle cx="34" cy="38" r="18" fill="#f1b94b"/><text x="34" y="45" text-anchor="middle" font-family="Arial" font-weight="700" font-size="18" fill="#131820">M</text>
-    <text x="64" y="34" font-family="Arial" font-weight="700" font-size="24" fill="#f4f7fb">XAUUSDT Virtual</text>
+    <text x="64" y="34" font-family="Arial" font-weight="700" font-size="24" fill="#f4f7fb">${marketSymbolLabel(market.symbol)} Virtual</text>
     <text x="64" y="58" font-family="Arial" font-size="14" fill="#7f8b9d">MBA LONG • THỊ TRƯỜNG ẢO</text>
     <text x="315" y="35" font-family="Arial" font-weight="700" font-size="28" fill="${positive ? "#16c784" : "#ea3943"}">${formatMarketPrice(current)}</text>
     <text x="315" y="59" font-family="Arial" font-size="16" fill="${positive ? "#16c784" : "#ea3943"}">${positive ? "+" : ""}${formatMarketPrice(change)}  ${positive ? "+" : ""}${changePercent.toFixed(2)}%</text>
     <text x="568" y="28" font-family="Arial" font-size="13" fill="#7f8b9d">GIÁ ĐÁNH DẤU</text><text x="568" y="53" font-family="Arial" font-size="17" fill="#dbe2ec">${formatMarketPrice(current + 2)}</text>
     <text x="730" y="28" font-family="Arial" font-size="13" fill="#7f8b9d">PHIÊN CÒN LẠI</text><text x="730" y="53" font-family="Arial" font-size="17" fill="#f1b94b">${remainingHours}h ${remainingMinutes}m</text>
-    <text x="905" y="28" font-family="Arial" font-size="13" fill="#7f8b9d">ĐÒN BẨY</text><text x="905" y="53" font-family="Arial" font-size="17" fill="#dbe2ec">1x — 100x</text>
+    <text x="905" y="28" font-family="Arial" font-size="13" fill="#7f8b9d">ĐÒN BẨY</text><text x="905" y="53" font-family="Arial" font-size="17" fill="#dbe2ec">TÙY CHỌN</text>
     <text x="1080" y="28" font-family="Arial" font-size="13" fill="#7f8b9d">CHẾ ĐỘ</text><text x="1080" y="53" font-family="Arial" font-size="17" fill="#dbe2ec">ISOLATED</text>
 
     <rect x="0" y="79" width="1280" height="52" fill="#101824"/>
@@ -109,8 +110,8 @@ export async function renderMarketImage(
 
     <g filter="url(#shadow)"><rect x="982" y="248" width="245" height="78" rx="14" fill="url(#long)"/><text x="1104" y="297" text-anchor="middle" font-family="Arial" font-weight="800" font-size="31" fill="#fff">↗ LONG</text></g>
     <g filter="url(#shadow)"><rect x="982" y="354" width="245" height="78" rx="14" fill="url(#short)"/><text x="1104" y="403" text-anchor="middle" font-family="Arial" font-weight="800" font-size="31" fill="#fff">↘ SHORT</text></g>
-    <text x="1104" y="472" text-anchor="middle" font-family="Arial" font-size="15" fill="#8d99aa">/long số_tiền 10x</text>
-    <text x="1104" y="498" text-anchor="middle" font-family="Arial" font-size="15" fill="#8d99aa">/short số_tiền 10x</text>
+    <text x="1104" y="472" text-anchor="middle" font-family="Arial" font-size="15" fill="#8d99aa">/long ${market.symbol} số_tiền 10x</text>
+    <text x="1104" y="498" text-anchor="middle" font-family="Arial" font-size="15" fill="#8d99aa">/short ${market.symbol} số_tiền 10x</text>
     <text x="24" y="696" font-family="Arial" font-size="13" fill="#687489">Giá được tạo trước cho toàn phiên 5 giờ; lệnh của người chơi không làm thay đổi thị trường.</text>
   </svg>`;
 

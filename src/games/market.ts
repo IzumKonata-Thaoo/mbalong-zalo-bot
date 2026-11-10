@@ -12,7 +12,9 @@ import {
   formatMarketPrice,
   formatSettleDuration,
   marketPriceAt,
+  marketSymbolLabel,
   type MarketSide,
+  type MarketSymbol,
   type VirtualMarket,
 } from "./market-rules.js";
 
@@ -48,9 +50,12 @@ const activePositions = new Map<string, OpenMarketPosition>();
 export const marketGuide = [
   "📈 LONG/SHORT · THỊ TRƯỜNG ẢO",
   "",
-  "• @MbaLong /market — xem biểu đồ hiện tại",
-  "• @MbaLong /long 10000 10x 30s",
-  "• @MbaLong /short 10000 20x 2m",
+  "• @MbaLong /market btc — xem biểu đồ XAU, BTC hoặc ETH",
+  "• @MbaLong /long btc 10000 10x 30s",
+  "• @MbaLong /short eth 10000 20x 2m",
+  "• @MbaLong /choicho btc long 10x sl 0.5x tp 2x",
+  "• @MbaLong /chot — đóng vị thế chạy liên tục",
+  "• @MbaLong /lenh — xem vị thế đang chạy",
   "• @MbaLong /sodu — xem số dư dùng chung với tài xỉu",
   "• @MbaLong /bxh — xem bảng xếp hạng hai trò",
   "",
@@ -60,13 +65,18 @@ export const marketGuide = [
   "Đây là trò chơi mô phỏng, không phải giá hoặc giao dịch thật.",
 ].join("\n");
 
-export function currentVirtualMarket(groupId: string, now = Date.now()) {
+export function currentVirtualMarket(
+  groupId: string,
+  now = Date.now(),
+  symbol: MarketSymbol = "xau",
+) {
   const sessionStart = Math.floor(now / MARKET_SESSION_MS) * MARKET_SESSION_MS;
-  const key = `${groupId}:${sessionStart}`;
+  const key = `${groupId}:${symbol}:${sessionStart}`;
   let market = marketCache.get(key);
   if (!market) {
-    market = createVirtualMarket(groupId, now);
-    marketCache.clear();
+    market = createVirtualMarket(groupId, now, symbol);
+    for (const cachedKey of marketCache.keys())
+      if (!cachedKey.endsWith(`:${sessionStart}`)) marketCache.delete(cachedKey);
     marketCache.set(key, market);
   }
   return market;
@@ -79,6 +89,7 @@ export function openMarketPosition(input: {
   side: MarketSide;
   stake: bigint;
   leverage: bigint;
+  symbol?: MarketSymbol;
   settleAfterMs?: number;
   now?: number;
 }): { ok: true; position: OpenMarketPosition } | { ok: false; message: string } {
@@ -106,7 +117,7 @@ export function openMarketPosition(input: {
       ok: false,
       message: `Số dư không đủ.\n\nSố dư: ${formatBetAmount(balance)}\nTiền vào lệnh: ${formatBetAmount(input.stake)}`,
     };
-  const market = currentVirtualMarket(input.groupId, now);
+  const market = currentVirtualMarket(input.groupId, now, input.symbol ?? "xau");
   const processingDelay = randomInt(5_000, 7_001);
   const marketDuration = input.settleAfterMs ?? processingDelay;
   const position: OpenMarketPosition = {
@@ -138,6 +149,7 @@ export async function settleMarketPosition(
       const exitPrice = marketPriceAt(position.market, closedAt);
       repository.audit(position.senderId, "market.liquidated", position.id, {
         groupId: position.groupId,
+        symbol: position.market.symbol,
         side: position.side,
         stake: position.stake.toString(),
         leverage: position.leverage.toString(),
@@ -190,6 +202,7 @@ export async function settleMarketPosition(
     const pnl = settlement.pnl;
     repository.audit(position.senderId, "market.settle", position.id, {
       groupId: position.groupId,
+      symbol: position.market.symbol,
       side: position.side,
       stake: position.stake.toString(),
       leverage: position.leverage.toString(),
@@ -226,7 +239,7 @@ export function marketOpenMessage(position: OpenMarketPosition) {
     position.marketCloseAt - position.openedAt,
   );
   return [
-    `${position.side === "long" ? "🟢" : "🔴"} ĐÃ MỞ ${position.side.toUpperCase()} ${position.leverage}x`,
+    `${position.side === "long" ? "🟢" : "🔴"} ĐÃ MỞ ${position.side.toUpperCase()} ${marketSymbolLabel(position.market.symbol)} ${position.leverage}x`,
     "",
     `Giá vào: ${formatMarketPrice(position.entryPrice)}`,
     `Tiền vào lệnh: ${formatBetAmount(position.stake)}`,
@@ -238,7 +251,7 @@ export function marketOpenMessage(position: OpenMarketPosition) {
 export function marketResultMessage(position: SettledMarketPosition) {
   if (position.liquidated)
     return [
-      `⚠️ ĐÃ ĐÓNG SỚM ${position.side.toUpperCase()} ${position.leverage}x`,
+      `⚠️ ĐÃ ĐÓNG SỚM ${position.side.toUpperCase()} ${marketSymbolLabel(position.market.symbol)} ${position.leverage}x`,
       "",
       "Số dư đã về 0 khi lệnh còn mở.",
       "Vị thế được đóng ngay và không tính kết quả thắng/thua.",
@@ -249,7 +262,7 @@ export function marketResultMessage(position: SettledMarketPosition) {
   const absolutePnl = position.pnl < 0n ? -position.pnl : position.pnl;
   const priceDirection = position.exitPrice >= position.entryPrice ? "↗" : "↘";
   return [
-    `📊 KẾT QUẢ ${position.side.toUpperCase()} · ${outcome}`,
+    `📊 KẾT QUẢ ${position.side.toUpperCase()} ${marketSymbolLabel(position.market.symbol)} · ${outcome}`,
     "",
     `Giá vào: ${formatMarketPrice(position.entryPrice)}`,
     `Giá chốt: ${formatMarketPrice(position.exitPrice)} ${priceDirection}`,

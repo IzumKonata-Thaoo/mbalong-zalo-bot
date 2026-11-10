@@ -351,6 +351,9 @@ export const repository = {
       return {previous,balance,pnl:appliedPnl};
     })();
   },
+  recordGameResult(zaloId:string,displayName:string,profit:bigint) {
+    db.transaction(() => recordGameResult(zaloId,displayName,profit))();
+  },
   gameLeaderboard(limit=10) {
     const rows=db.prepare("SELECT * FROM game_stats").all() as Array<{
       zalo_id:string;display_name:string;total_winnings:string;net_profit:string;

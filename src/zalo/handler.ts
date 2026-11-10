@@ -16,8 +16,16 @@ import { renderMarketImage } from "../games/market-image.js";
 import {
   formatMarketPrice,
   marketPriceAt,
+  marketSymbolLabel,
   parseMarketCommand,
 } from "../games/market-rules.js";
+import {
+  closeContinuousPosition,
+  continuousMarketGuide,
+  continuousPositionStatus,
+  openContinuousPosition,
+  parseContinuousMarketCommand,
+} from "../games/continuous-market.js";
 import { handleWalletCommand } from "../games/wallet.js";
 import { parseWalletCommand } from "../games/wallet-rules.js";
 import {
@@ -45,6 +53,7 @@ function messageLane(question: string, hasImage: boolean): MessageLane {
   if (isClearContextCommand(question)) return "ai";
   if (parseWalletCommand(question)) return "game";
   if (isLeaderboardCommand(question)) return "game";
+  if (parseContinuousMarketCommand(question)) return "game";
   if (parseMarketCommand(question)) return "game";
   if (parseTaiXiu(question)) return "game";
   if (parseMusicIntent(question)) return "music";
@@ -91,6 +100,50 @@ async function processMessage(message: IncomingGroupMessage, question: string) {
       );
       return;
     }
+    const continuousCommand = message.imageUrl
+      ? null
+      : parseContinuousMarketCommand(question);
+    if (continuousCommand) {
+      if (continuousCommand.kind === "help" || continuousCommand.kind === "invalid") {
+        await zaloClient.send(
+          message.groupId,
+          continuousCommand.kind === "invalid"
+            ? `⚠️ Cú pháp chưa đúng.\n\n${continuousMarketGuide}`
+            : continuousMarketGuide,
+          message.raw,
+        );
+        return;
+      }
+      if (continuousCommand.kind === "close") {
+        await zaloClient.send(
+          message.groupId,
+          closeContinuousPosition(message.senderId),
+          message.raw,
+        );
+        return;
+      }
+      if (continuousCommand.kind === "status") {
+        await zaloClient.send(
+          message.groupId,
+          continuousPositionStatus(message.senderId),
+          message.raw,
+        );
+        return;
+      }
+      const opened = openContinuousPosition({
+        groupId: message.groupId,
+        senderId: message.senderId,
+        senderName: message.senderName,
+        symbol: continuousCommand.symbol,
+        side: continuousCommand.side,
+        leverage: continuousCommand.leverage,
+        stopLoss: continuousCommand.stopLoss,
+        takeProfit: continuousCommand.takeProfit,
+        notify: (text) => zaloClient.send(message.groupId, text),
+      });
+      await zaloClient.send(message.groupId, opened.message, message.raw);
+      return;
+    }
     const marketCommand = message.imageUrl ? null : parseMarketCommand(question);
     if (marketCommand) {
       if (marketCommand.kind === "help" || marketCommand.kind === "invalid") {
@@ -105,13 +158,14 @@ async function processMessage(message: IncomingGroupMessage, question: string) {
       }
       if (marketCommand.kind === "market") {
         const now = Date.now();
-        const market = currentVirtualMarket(message.groupId, now);
+        const symbol = marketCommand.symbol ?? "xau";
+        const market = currentVirtualMarket(message.groupId, now, symbol);
         const price = marketPriceAt(market, now);
         const image = await renderMarketImage(market, now);
         await zaloClient.sendImage(
           message.groupId,
           image,
-          `📈 XAUUSDT Virtual · ${formatMarketPrice(price)}\nThị trường ảo dùng chung trong nhóm · Phiên 5 giờ`,
+          `📈 ${marketSymbolLabel(symbol)} Virtual · ${formatMarketPrice(price)}\nThị trường ảo dùng chung trong nhóm · Phiên 5 giờ`,
           message.raw,
         );
         return;
@@ -123,6 +177,7 @@ async function processMessage(message: IncomingGroupMessage, question: string) {
         side: marketCommand.side,
         stake: marketCommand.stake,
         leverage: marketCommand.leverage,
+        symbol: marketCommand.symbol,
         settleAfterMs: marketCommand.settleAfterMs,
       });
       if (!opened.ok) {

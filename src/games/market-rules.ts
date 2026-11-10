@@ -2,10 +2,12 @@ export const MARKET_SESSION_MS = 5 * 60 * 60 * 1_000;
 export const MARKET_HISTORY_SECONDS = 60 * 60;
 export const MARKET_MIN_SETTLE_MS = 5_000;
 export const MARKET_MAX_SETTLE_MS = 5 * 60 * 1_000;
+export const MARKET_SYMBOLS = ["xau", "btc", "eth"] as const;
 
 export type MarketSide = "long" | "short";
+export type MarketSymbol = (typeof MARKET_SYMBOLS)[number];
 export type MarketCommand =
-  | { kind: "market" }
+  | { kind: "market"; symbol?: MarketSymbol }
   | { kind: "help" }
   | {
       kind: "position";
@@ -13,11 +15,13 @@ export type MarketCommand =
       stake: bigint;
       leverage: bigint;
       settleAfterMs?: number;
+      symbol?: MarketSymbol;
     }
   | { kind: "invalid" };
 
 export interface VirtualMarket {
   groupId: string;
+  symbol: MarketSymbol;
   sessionStart: number;
   sessionEnd: number;
   /** Prices are stored in cents and include one hour of pre-session history. */
@@ -35,12 +39,26 @@ export interface MarketCandle {
 
 export function parseMarketCommand(input: string): MarketCommand | null {
   const text = input.trim();
-  if (/^(?:\/market|\/thitruong|xem\s+thị\s+trường|xem\s+thi\s+truong)$/i.test(text))
-    return { kind: "market" };
+  const marketMatch = text.match(
+    /^(?:\/market|\/thitruong|xem\s+thị\s+trường|xem\s+thi\s+truong)(?:\s+(xau|btc|eth))?$/i,
+  );
+  if (marketMatch)
+    return {
+      kind: "market",
+      ...(marketMatch[1]
+        ? { symbol: marketMatch[1].toLowerCase() as MarketSymbol }
+        : {}),
+    };
   if (/^\/(?:trade|giaodich)\s*$/i.test(text)) return { kind: "help" };
   const marker = text.match(/^\/(long|short)\b/i);
   if (!marker) return null;
-  const rest = text.slice(marker[0].length).trim();
+  let rest = text.slice(marker[0].length).trim();
+  let symbol: MarketSymbol | undefined;
+  const symbolMatch = rest.match(/^(xau|btc|eth)\s+/i);
+  if (symbolMatch) {
+    symbol = symbolMatch[1]!.toLowerCase() as MarketSymbol;
+    rest = rest.slice(symbolMatch[0].length);
+  }
   const match = rest.match(
     /^([1-9]\d*)\s+(?:x(\d+)|(\d+)x)(?:\s+([1-9]\d*)\s*(s|m|giây|giay|phút|phut)?)?$/i,
   );
@@ -66,7 +84,12 @@ export function parseMarketCommand(input: string): MarketCommand | null {
     stake: BigInt(match[1]!),
     leverage,
     ...(settleAfterMs ? { settleAfterMs } : {}),
+    ...(symbol && symbol !== "xau" ? { symbol } : {}),
   };
+}
+
+export function marketSymbolLabel(symbol: MarketSymbol) {
+  return `${symbol.toUpperCase()}USDT`;
 }
 
 export function formatSettleDuration(milliseconds: number) {
@@ -75,24 +98,36 @@ export function formatSettleDuration(milliseconds: number) {
   return `${seconds} giây`;
 }
 
-export function createVirtualMarket(groupId: string, now = Date.now()): VirtualMarket {
+export function createVirtualMarket(
+  groupId: string,
+  now = Date.now(),
+  symbol: MarketSymbol = "xau",
+): VirtualMarket {
   const sessionStart = Math.floor(now / MARKET_SESSION_MS) * MARKET_SESSION_MS;
   const sessionEnd = sessionStart + MARKET_SESSION_MS;
   const seconds = MARKET_HISTORY_SECONDS + MARKET_SESSION_MS / 1_000 + 10;
-  const random = mulberry32(hash32(`${groupId}:${sessionStart}`));
-  const groupSeed = hash32(groupId);
-  let price = 245_000 + (groupSeed % 35_000);
+  const random = mulberry32(hash32(`${groupId}:${symbol}:${sessionStart}`));
+  const groupSeed = hash32(`${groupId}:${symbol}`);
+  const profile = {
+    xau: { base: 265_000, spread: 30_000, volatility: 1 },
+    btc: { base: 7_000_000, spread: 900_000, volatility: 30 },
+    eth: { base: 350_000, spread: 80_000, volatility: 4 },
+  }[symbol];
+  let price = profile.base + (groupSeed % profile.spread);
   let momentum = 0;
   const prices: number[] = [];
   for (let index = 0; index <= seconds; index++) {
     momentum = momentum * 0.82 + (random() - 0.5) * 18;
     const wave = Math.sin((index + (groupSeed % 997)) / 73) * 3.2;
     const shock = random() < 0.003 ? (random() - 0.5) * 180 : 0;
-    const delta = Math.round(momentum + wave + (random() - 0.5) * 24 + shock);
+    const delta = Math.round(
+      (momentum + wave + (random() - 0.5) * 24 + shock) *
+        profile.volatility,
+    );
     price = Math.max(50_000, price + delta);
     prices.push(price);
   }
-  return { groupId, sessionStart, sessionEnd, prices };
+  return { groupId, symbol, sessionStart, sessionEnd, prices };
 }
 
 export function marketPriceAt(market: VirtualMarket, at = Date.now()): number {
