@@ -30,6 +30,26 @@
 .jackpot-card .rate-title strong {
   color: #efc565;
 }
+.wipeout-card {
+  grid-column: 1 / -1;
+  background:
+    radial-gradient(circle at 90% 0, #ff566b18, transparent 35%),
+    #091723;
+  border-color: #ff566b38;
+}
+.wipeout-card .rate-title > svg,
+.wipeout-card .rate-title strong {
+  color: #ff6b7d;
+}
+.wipeout-card input[type="range"] {
+  accent-color: #ff6b7d;
+}
+.wipeout-note {
+  display: block;
+  margin-top: 13px;
+  color: #8a9baa;
+  line-height: 1.6;
+}
 .rate-title {
   display: flex;
   align-items: center;

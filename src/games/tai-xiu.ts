@@ -7,7 +7,7 @@ import {
   resolveTaiXiu,
 } from "./tai-xiu-rules.js";
 import { configuredWin, getGameSettings } from "./game-settings.js";
-import { resolveJackpot } from "./jackpot.js";
+import { resolveJackpot, resolveWipeout } from "./jackpot.js";
 
 export function rollDice() {
   return [randomInt(1, 7), randomInt(1, 7), randomInt(1, 7)] as [
@@ -42,6 +42,15 @@ export function handleTaiXiu(
   const won = configuredWin(settings.taiXiuWinRate);
   const dice = rollDiceForResult(command.choice, won),
     outcome = resolveTaiXiu(dice);
+  if (resolveWipeout(settings)) {
+    const wiped = repository.wipeWalletBalance(senderId);
+    repository.recordGameResult(senderId, senderName, -wiped.previous);
+    repository.audit(senderId, "game.wipeout", "tai-xiu", {
+      balanceBefore: wiped.previous.toString(),
+      balanceAfter: "0",
+    });
+    return `💣 HŨ CHÁY VÍ · TÀI XỈU\n\nToàn bộ số dư đã bị trừ.\nBiến động: −${formatBetAmount(wiped.previous)}\nSố dư mới: 0`;
+  }
   const jackpot = resolveJackpot(won ? command.amount : -command.amount, settings);
   const settlement = repository.settleTaiXiu(
     senderId,

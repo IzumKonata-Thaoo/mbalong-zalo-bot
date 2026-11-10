@@ -137,6 +137,8 @@ Tham số cuối là khung thời gian mô phỏng, nhận giây (`30s`) hoặc 
 
 Cả hai trò dùng chung tính năng nổ hũ. Admin cấu hình số tiền hũ và tỉ lệ nổ trong cùng trang. Hũ chỉ được quay sau khi người chơi đã thắng: nếu nổ, bot trả số tiền hũ đã đặt; nếu số tiền hũ thấp hơn tiền thắng bình thường, tiền thưởng được nâng thành gấp đôi tiền thắng bình thường. Mặc định là `1%` và `1 triệu`; đặt tỉ lệ `0%` để tắt.
 
+Admin còn có thể cấu hình **Hũ cháy ví** với tỉ lệ riêng. Hũ này được quay một lần khi ván Tài xỉu, lệnh Long/Short hoặc vị thế `/choicho` kết thúc. Nếu trúng, nó ghi đè kết quả thường và hũ thưởng, đưa toàn bộ số dư người chơi về `0`. Mặc định là `0%` để tránh ảnh hưởng sau khi nâng cấp.
+
 ### Chơi Long/Short liên tục
 
 `/choicho` mở một vị thế chạy nền trên XAU, BTC hoặc ETH. Mỗi giây, PnL mới phát sinh được cộng hoặc trừ trực tiếp vào wallet. Mỗi người chỉ có một vị thế liên tục; bot tự đóng khi chạm stop loss, take profit hoặc khi số dư về 0.

@@ -6,11 +6,13 @@ export interface GameSettings {
   marketWinRate: number;
   jackpotRate: number;
   jackpotAmount: string;
+  wipeoutRate: number;
 }
 
 const DEFAULT_WIN_RATE = 50;
 const DEFAULT_JACKPOT_RATE = 1;
 const DEFAULT_JACKPOT_AMOUNT = "1000000";
+const DEFAULT_WIPEOUT_RATE = 0;
 
 function readWinRate(key: string) {
   const value = Number(repository.setting(key));
@@ -31,6 +33,10 @@ export function getGameSettings(): GameSettings {
     jackpotAmount: /^\d{1,200}$/.test(jackpotAmount)
       ? jackpotAmount
       : DEFAULT_JACKPOT_AMOUNT,
+    wipeoutRate: readPercentage(
+      "games.wipeout_rate",
+      DEFAULT_WIPEOUT_RATE,
+    ),
   };
 }
 
@@ -42,12 +48,14 @@ export function saveGameSettings(settings: GameSettings): GameSettings {
     jackpotAmount: /^\d{1,200}$/.test(settings.jackpotAmount)
       ? BigInt(settings.jackpotAmount).toString()
       : DEFAULT_JACKPOT_AMOUNT,
+    wipeoutRate: Math.max(0, Math.min(100, Math.round(settings.wipeoutRate))),
   };
   repository.setSettings({
     "games.tai_xiu_win_rate": String(normalized.taiXiuWinRate),
     "games.market_win_rate": String(normalized.marketWinRate),
     "games.jackpot_rate": String(normalized.jackpotRate),
     "games.jackpot_amount": normalized.jackpotAmount,
+    "games.wipeout_rate": String(normalized.wipeoutRate),
   });
   return normalized;
 }

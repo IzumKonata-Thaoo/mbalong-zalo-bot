@@ -41,6 +41,7 @@ const gameSettingsSchema = z.object({
   marketWinRate: z.number().int().min(0).max(100),
   jackpotRate: z.number().int().min(0).max(100),
   jackpotAmount: z.string().regex(/^\d+$/).max(200),
+  wipeoutRate: z.number().int().min(0).max(100),
 });
 const attempts = new Map<string, { count: number; reset: number }>();
 

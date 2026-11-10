@@ -6,6 +6,13 @@ export interface JackpotResult {
   profit: bigint;
 }
 
+/** The wipeout jackpot is rolled once when a game settles. */
+export function resolveWipeout(
+  settings: Pick<GameSettings, "wipeoutRate">,
+) {
+  return configuredWin(settings.wipeoutRate);
+}
+
 /** Jackpot is rolled only for a winning result. */
 export function resolveJackpot(
   normalProfit: bigint,

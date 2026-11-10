@@ -25,6 +25,7 @@ import {
   TrendingUp,
   Trophy,
   Gem,
+  Bomb,
 } from "lucide-react";
 import { api } from "./api";
 
@@ -742,6 +743,7 @@ function SettingsPage() {
   const [marketWinRate, setMarketWinRate] = useState(50);
   const [jackpotRate, setJackpotRate] = useState(1);
   const [jackpotAmount, setJackpotAmount] = useState("1000000");
+  const [wipeoutRate, setWipeoutRate] = useState(0);
   const [gameBusy, setGameBusy] = useState(false);
   const [gameMsg, setGameMsg] = useState("");
   const [gameError, setGameError] = useState("");
@@ -756,6 +758,7 @@ function SettingsPage() {
       setMarketWinRate(data.games?.marketWinRate ?? 50);
       setJackpotRate(data.games?.jackpotRate ?? 1);
       setJackpotAmount(data.games?.jackpotAmount ?? "1000000");
+      setWipeoutRate(data.games?.wipeoutRate ?? 0);
     });
   }, []);
   if (!cfg) return <PageLoader />;
@@ -806,6 +809,7 @@ function SettingsPage() {
         marketWinRate: number;
         jackpotRate: number;
         jackpotAmount: string;
+        wipeoutRate: number;
       }>(
         "/config/games",
         {
@@ -815,6 +819,7 @@ function SettingsPage() {
             marketWinRate,
             jackpotRate,
             jackpotAmount,
+            wipeoutRate,
           }),
         },
       );
@@ -822,8 +827,9 @@ function SettingsPage() {
       setMarketWinRate(saved.marketWinRate);
       setJackpotRate(saved.jackpotRate);
       setJackpotAmount(saved.jackpotAmount);
+      setWipeoutRate(saved.wipeoutRate);
       setCfg({ ...cfg, games: saved });
-      setGameMsg("Đã áp dụng tỉ lệ thắng cho các ván mới.");
+      setGameMsg("Đã áp dụng cấu hình trò chơi cho các ván mới.");
     } catch (e) {
       setGameError((e as Error).message);
     } finally {
@@ -1033,6 +1039,37 @@ function SettingsPage() {
                 Nếu thấp hơn tiền thắng bình thường, bot tự trả gấp đôi tiền thắng.
               </small>
             </label>
+          </section>
+          <section className="rate-card wipeout-card">
+            <div className="rate-title">
+              <Bomb />
+              <div>
+                <b>Hũ cháy ví</b>
+                <small>Quay một lần khi ván hoặc vị thế kết thúc</small>
+              </div>
+              <strong>{wipeoutRate}%</strong>
+            </div>
+            <div className="rate-inputs">
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={wipeoutRate}
+                onChange={(e) => setWipeoutRate(Number(e.target.value))}
+              />
+              <input
+                aria-label="Tỉ lệ hũ cháy ví"
+                type="number"
+                min="0"
+                max="100"
+                value={wipeoutRate}
+                onChange={(e) => setWipeoutRate(Number(e.target.value))}
+              />
+            </div>
+            <small className="wipeout-note">
+              Khi trúng, kết quả thường và hũ thưởng bị ghi đè, toàn bộ số dư
+              của người chơi về 0. Đặt 0% để tắt.
+            </small>
           </section>
         </div>
         {gameError && <div className="error">{gameError}</div>}

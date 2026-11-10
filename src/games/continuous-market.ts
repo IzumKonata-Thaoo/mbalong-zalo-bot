@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { repository } from "../db.js";
 import { formatBetAmount } from "./tai-xiu-rules.js";
 import { currentVirtualMarket } from "./market.js";
+import { getGameSettings } from "./game-settings.js";
+import { resolveWipeout } from "./jackpot.js";
 import {
   calculateLeveragedPnl,
   formatMarketPrice,
@@ -264,6 +266,13 @@ function finishPosition(
     return "Vị thế đã được đóng.";
   if (position.timer) clearTimeout(position.timer);
   positions.delete(position.senderId);
+  const wipeout =
+    repository.walletBalance(position.senderId) > 0n &&
+    resolveWipeout(getGameSettings());
+  if (wipeout) {
+    const wiped = repository.wipeWalletBalance(position.senderId);
+    position.cumulativePnl -= wiped.previous;
+  }
   const balance = repository.walletBalance(position.senderId);
   position.balance = balance;
   repository.recordGameResult(
@@ -280,8 +289,17 @@ function finishPosition(
     initialBalance: position.initialBalance.toString(),
     finalBalance: balance.toString(),
     pnl: position.cumulativePnl.toString(),
+    wipeout,
   });
-  const message = closeMessage(position, reason);
+  const message = wipeout
+    ? [
+        `💣 HŨ CHÁY VÍ · ${marketSymbolLabel(position.symbol)}`,
+        "",
+        "Toàn bộ số dư đã bị trừ khi đóng lệnh.",
+        `PnL chung cuộc: −${formatBetAmount(-position.cumulativePnl)}`,
+        "Số dư mới: 0",
+      ].join("\n")
+    : closeMessage(position, reason);
   if (notify)
     void position.notify(message).catch((error) =>
       console.error("Continuous market close notification error", error),

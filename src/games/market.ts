@@ -2,7 +2,7 @@ import { randomInt, randomUUID } from "node:crypto";
 import { repository } from "../db.js";
 import { formatBetAmount } from "./tai-xiu-rules.js";
 import { configuredWin, getGameSettings } from "./game-settings.js";
-import { resolveJackpot } from "./jackpot.js";
+import { resolveJackpot, resolveWipeout } from "./jackpot.js";
 import {
   MARKET_MAX_SETTLE_MS,
   MARKET_MIN_SETTLE_MS,
@@ -42,6 +42,7 @@ export interface SettledMarketPosition extends OpenMarketPosition {
   jackpot?: boolean;
   normalPnl?: bigint;
   liquidated?: boolean;
+  wipeout?: boolean;
 }
 
 const marketCache = new Map<string, VirtualMarket>();
@@ -193,6 +194,26 @@ export async function settleMarketPosition(
       position.entryPrice,
       exitPrice,
     );
+    if (resolveWipeout(settings)) {
+      const wiped = repository.wipeWalletBalance(position.senderId);
+      const pnl = -wiped.previous;
+      repository.recordGameResult(position.senderId, position.senderName, pnl);
+      repository.audit(position.senderId, "market.wipeout", position.id, {
+        groupId: position.groupId,
+        symbol: position.market.symbol,
+        side: position.side,
+        balanceBefore: wiped.previous.toString(),
+        balanceAfter: "0",
+      });
+      return {
+        ...position,
+        exitPrice,
+        pnl,
+        balance: 0n,
+        wipeout: true,
+        normalPnl: calculatedPnl,
+      };
+    }
     const jackpot = resolveJackpot(calculatedPnl, settings);
     const settlement = repository.settleMarketGame(
       position.senderId,
@@ -249,6 +270,14 @@ export function marketOpenMessage(position: OpenMarketPosition) {
 }
 
 export function marketResultMessage(position: SettledMarketPosition) {
+  if (position.wipeout)
+    return [
+      `💣 HŨ CHÁY VÍ · ${marketSymbolLabel(position.market.symbol)}`,
+      "",
+      "Toàn bộ số dư đã bị trừ.",
+      `Biến động: −${formatBetAmount(-position.pnl)}`,
+      "Số dư mới: 0",
+    ].join("\n");
   if (position.liquidated)
     return [
       `⚠️ ĐÃ ĐÓNG SỚM ${position.side.toUpperCase()} ${marketSymbolLabel(position.market.symbol)} ${position.leverage}x`,

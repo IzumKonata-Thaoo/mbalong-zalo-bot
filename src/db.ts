@@ -326,6 +326,15 @@ export const repository = {
       return {ok:true as const,previous,balance};
     })();
   },
+  wipeWalletBalance(zaloId:string) {
+    return db.transaction(() => {
+      const row=db.prepare("SELECT balance FROM wallets WHERE zalo_id=?").get(zaloId) as {balance:string}|undefined;
+      const previous=BigInt(row?.balance ?? "0");
+      db.prepare(`INSERT INTO wallets(zalo_id,balance,updated_at) VALUES(?,0,CURRENT_TIMESTAMP)
+        ON CONFLICT(zalo_id) DO UPDATE SET balance='0',updated_at=CURRENT_TIMESTAMP`).run(zaloId);
+      return {previous,balance:0n};
+    })();
+  },
   settleTaiXiu(zaloId:string,stake:bigint,won:boolean,displayName=`Zalo ${zaloId.slice(-6)}`,winProfit=stake): {ok:true;previous:bigint;balance:bigint}|{ok:false;balance:bigint} {
     return db.transaction(() => {
       const row=db.prepare("SELECT balance FROM wallets WHERE zalo_id=?").get(zaloId) as {balance:string}|undefined;

@@ -37,12 +37,14 @@ describe("configured game win rate", () => {
       marketWinRate: 55,
       jackpotRate: 3,
       jackpotAmount: "9000000",
+      wipeoutRate: 4,
     });
     expect(getGameSettings()).toEqual({
       taiXiuWinRate: 45,
       marketWinRate: 55,
       jackpotRate: 3,
       jackpotAmount: "9000000",
+      wipeoutRate: 4,
     });
   });
 });
