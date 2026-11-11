@@ -7,7 +7,6 @@ import {
   MARKET_MAX_SETTLE_MS,
   MARKET_MIN_SETTLE_MS,
   MARKET_SESSION_MS,
-  calculateLeveragedPnl,
   createVirtualMarket,
   formatMarketPrice,
   formatSettleDuration,
@@ -61,6 +60,7 @@ export const marketGuide = [
   "• @MbaLong /bxh — xem bảng xếp hạng hai trò",
   "",
   "Đòn bẩy: nhập số nguyên dương bất kỳ, không giới hạn mức tối đa.",
+  "PnL khi chốt = tiền vào lệnh × đòn bẩy. Thắng cộng đủ, thua trừ đủ; ví không xuống dưới 0.",
   "Khung chốt mô phỏng: 5s–5m (ví dụ 30s, 2m). Khung dài có thể tạo biên độ lớn hơn.",
   "Bot luôn trả kết quả sau khoảng 5–7 giây. Nếu số dư về 0 lúc đang xử lý, bot tự đóng lệnh.",
   "Đây là trò chơi mô phỏng, không phải giá hoặc giao dịch thật.",
@@ -177,9 +177,8 @@ export async function settleMarketPosition(
       Math.abs(naturalExitPrice - position.entryPrice),
     );
     const marketDuration = position.marketCloseAt - position.openedAt;
-    // Losing positions get a more visible adverse move. Longer simulated
-    // windows amplify it further, while calculateLeveragedPnl still caps loss
-    // at the user's stake.
+    // Keep the chart visually consistent with the configured result. Wallet
+    // settlement itself is the exact stake × leverage amount below.
     const lossMultiplier = shouldWin
       ? 1
       : 2 + Math.min(5, marketDuration / 60_000);
@@ -187,12 +186,10 @@ export async function settleMarketPosition(
     const winningDirection = position.side === "long" ? 1 : -1;
     const exitPrice =
       position.entryPrice + movement * winningDirection * (shouldWin ? 1 : -1);
-    const calculatedPnl = calculateLeveragedPnl(
+    const calculatedPnl = calculateFixedMarketPnl(
       position.stake,
       position.leverage,
-      position.side,
-      position.entryPrice,
-      exitPrice,
+      shouldWin,
     );
     if (resolveWipeout(settings)) {
       const wiped = repository.wipeWalletBalance(position.senderId);
@@ -248,6 +245,16 @@ export async function settleMarketPosition(
   } finally {
     if (activePositions.get(key)?.id === position.id) activePositions.delete(key);
   }
+}
+
+export function calculateFixedMarketPnl(
+  stake: bigint,
+  leverage: bigint,
+  won: boolean,
+) {
+  if (stake <= 0n || leverage <= 0n) return 0n;
+  const amount = stake * leverage;
+  return won ? amount : -amount;
 }
 
 export function cancelMarketPosition(position: OpenMarketPosition) {

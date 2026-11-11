@@ -117,7 +117,7 @@ Các mức từ một triệu trở lên được hiển thị rút gọn, ví d
 
 ## Long/Short trên thị trường ảo
 
-Long/Short dùng chung số dư với tài xỉu. Mỗi nhóm có các đường giá XAUUSDT, BTCUSDT và ETHUSDT mô phỏng được tạo trước, giữ nhất quán trong phiên 5 giờ; phía lệnh của người chơi không làm thay đổi thị trường. Người chơi chọn khung chốt mô phỏng từ 5 giây đến 5 phút, hoặc bỏ trống để dùng 5–7 giây ngẫu nhiên. Đây là thời gian chạy bên trong phiên để lấy giá chốt và tính PnL; bot vẫn trả kết quả ngoài Zalo sau khoảng 5–7 giây. Khung dài hơn có biên độ tiềm năng lớn hơn. Lỗ tối đa bằng tiền vào lệnh. Đây chỉ là trò chơi bằng điểm ảo, không phải dữ liệu hay giao dịch tài chính thật.
+Long/Short dùng chung số dư với tài xỉu. Mỗi nhóm có các đường giá XAUUSDT, BTCUSDT và ETHUSDT mô phỏng được tạo trước, giữ nhất quán trong phiên 5 giờ; phía lệnh của người chơi không làm thay đổi thị trường. Người chơi chọn khung chốt mô phỏng từ 5 giây đến 5 phút, hoặc bỏ trống để dùng 5–7 giây ngẫu nhiên. Bot vẫn trả kết quả ngoài Zalo sau khoảng 5–7 giây. Đây chỉ là trò chơi bằng điểm ảo, không phải dữ liệu hay giao dịch tài chính thật.
 
 ```text
 @MbaLong /market xau
@@ -129,9 +129,9 @@ Long/Short dùng chung số dư với tài xỉu. Mỗi nhóm có các đường
 @MbaLong /bxh
 ```
 
-Đòn bẩy nhận mọi số nguyên dương (`1x`, `100x`, `999999x` hoặc lớn hơn) và được tính bằng `BigInt`, không đặt mức tối đa. Lỗ vẫn bị giới hạn tối đa bằng tiền vào lệnh; lãi không đặt trần. `/market` gửi ảnh biểu đồ PNG 1280×720 trực tiếp lên Zalo.
+Đòn bẩy nhận mọi số nguyên dương (`1x`, `100x`, `999999x` hoặc lớn hơn) và được tính bằng `BigInt`, không đặt mức tối đa. PnL của lệnh chốt được tính cố định bằng `tiền vào lệnh × đòn bẩy`: thắng cộng toàn bộ số đó, thua trừ toàn bộ số đó. Nếu khoản thua lớn hơn số dư hiện tại thì ví về `0`, không thành số âm. `/market` gửi ảnh biểu đồ PNG 1280×720 trực tiếp lên Zalo.
 
-Khi một vị thế thua, biên độ bất lợi được tăng theo khung mô phỏng để mức lỗ rõ hơn; khung càng dài thì biến động thua càng mạnh. Mức lỗ cuối cùng vẫn không vượt quá tiền vào lệnh.
+Biểu đồ và giá chốt vẫn được dựng theo đúng hướng thắng hoặc thua để kết quả hiển thị nhất quán; số tiền quyết toán không còn phụ thuộc vào biên độ giá nhỏ trên biểu đồ.
 
 Tham số cuối là khung thời gian mô phỏng, nhận giây (`30s`) hoặc phút (`2m`), trong khoảng 5 giây đến 5 phút. Dù chọn `5m`, kết quả vẫn được trả sau 5–7 giây thực tế. Không nhập thì cả khung mô phỏng lẫn thời gian trả kết quả dùng 5–7 giây ngẫu nhiên. Nếu wallet của người chơi về 0 trong lúc bot đang xử lý lệnh, bot tự đóng vị thế ngay và thông báo trong nhóm; vị thế đó không tính thắng/thua hay nổ hũ.
 

@@ -107,10 +107,61 @@ describe("market wallet settlement", () => {
     if (!opened.ok) return;
 
     const settled = await market.settleMarketPosition(opened.position);
-    expect(settled.pnl).toBeGreaterThan(0n);
+    expect(settled.pnl).toBe(200_000n);
     expect(repository.walletBalance("winner")).toBe(20_000n + settled.pnl);
     expect(repository.gameLeaderboard().find((row) => row.zalo_id === "winner"))
       .toMatchObject({ games_played: 1, games_won: 1 });
+  });
+
+  it("subtracts stake times leverage on a losing result", async () => {
+    repository.setSettings({
+      "games.market_win_rate": "0",
+      "games.jackpot_rate": "0",
+      "games.wipeout_rate": "0",
+    });
+    repository.adjustWalletBalance("leveraged-loser", 1_500_000n);
+    const opened = market.openMarketPosition({
+      groupId: "g-market",
+      senderId: "leveraged-loser",
+      senderName: "Leveraged Loser",
+      side: "long",
+      stake: 1_000n,
+      leverage: 1_000n,
+      now: Date.now() - 10_000,
+    });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+
+    const settled = await market.settleMarketPosition(opened.position);
+    expect(settled.normalPnl).toBe(-1_000_000n);
+    expect(settled.pnl).toBe(-1_000_000n);
+    expect(repository.walletBalance("leveraged-loser")).toBe(500_000n);
+  });
+
+  it("stops a leveraged loss at zero instead of creating a negative wallet", async () => {
+    repository.setSettings({
+      "games.market_win_rate": "0",
+      "games.jackpot_rate": "0",
+      "games.wipeout_rate": "0",
+    });
+    repository.adjustWalletBalance("capped-loser", 50_000n);
+    const opened = market.openMarketPosition({
+      groupId: "g-market",
+      senderId: "capped-loser",
+      senderName: "Capped Loser",
+      side: "short",
+      stake: 1_000n,
+      leverage: 1_000n,
+      now: Date.now() - 10_000,
+    });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+
+    const settled = await market.settleMarketPosition(opened.position);
+    expect(settled.normalPnl).toBe(-1_000_000n);
+    expect(settled.pnl).toBe(-50_000n);
+    expect(settled.balance).toBe(0n);
+    expect(repository.walletBalance("capped-loser")).toBe(0n);
   });
 
   it("credits double the normal market win when a smaller jackpot hits", async () => {
