@@ -14,6 +14,16 @@ describe("wallet commands", () => {
       operation: "subtract",
       amount: 500n,
     });
+    expect(parseWalletCommand("/tru allin")).toEqual({
+      kind: "adjust",
+      operation: "subtract",
+      amount: "allin",
+    });
+    expect(parseWalletCommand("/nap 1tỷ")).toEqual({
+      kind: "adjust",
+      operation: "add",
+      amount: 1_000_000_000n,
+    });
   });
 
   it("parses an explicit Zalo ID target", () => {
@@ -22,6 +32,12 @@ describe("wallet commands", () => {
       operation: "add",
       explicitTargetId: "123456789",
       amount: 10000n,
+    });
+    expect(parseWalletCommand("/nap 123456789 1tỷ")).toEqual({
+      kind: "adjust",
+      operation: "add",
+      explicitTargetId: "123456789",
+      amount: 1_000_000_000n,
     });
   });
 
@@ -42,6 +58,11 @@ describe("wallet commands", () => {
       kind: "transfer",
       explicitTargetId: "123456789",
       amount: 3000n,
+    });
+    expect(parseWalletCommand("/chuyen 123456789 allin")).toEqual({
+      kind: "transfer",
+      explicitTargetId: "123456789",
+      amount: "allin",
     });
   });
 });

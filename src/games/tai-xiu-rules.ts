@@ -1,19 +1,23 @@
+import { parseAmountExpression, type AmountExpression } from "./amount.js";
+
 export type TaiXiuChoice = "tai" | "xiu";
 export type TaiXiuCommand =
   | { kind: "help" }
-  | { kind: "bet"; choice: TaiXiuChoice; amount: bigint }
+  | { kind: "bet"; choice: TaiXiuChoice; amount: AmountExpression }
   | { kind: "invalid" };
 
 export function parseTaiXiu(input: string): TaiXiuCommand | null {
   const text = input.trim().toLowerCase();
   if (!text.startsWith("/tx")) return null;
   if (text === "/tx") return { kind: "help" };
-  const match = text.match(/^\/tx\s+(tài|tai|xỉu|xiu)\s+([1-9]\d*)$/i);
+  const match = text.match(/^\/tx\s+(tài|tai|xỉu|xiu)\s+(.+)$/i);
   if (!match) return { kind: "invalid" };
+  const amount = parseAmountExpression(match[2]!);
+  if (amount === null) return { kind: "invalid" };
   return {
     kind: "bet",
     choice: /^(tài|tai)$/i.test(match[1]!) ? "tai" : "xiu",
-    amount: BigInt(match[2]!),
+    amount,
   };
 }
 

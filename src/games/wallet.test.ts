@@ -46,6 +46,21 @@ const deps = (isAdmin: boolean) => ({
 });
 
 describe("/nap and /tru", () => {
+  it("subtracts the selected wallet to exactly zero with /tru allin", async () => {
+    repository.adjustWalletBalance("admin-allin", 1_234_567n);
+    const reply = await handleWalletCommand(
+      message({
+        senderId: "admin-allin",
+        senderIds: ["admin-allin"],
+        senderName: "Admin All In",
+      }),
+      "/tru allin",
+      deps(true),
+    );
+    expect(reply).toContain("TRỪ SỐ DƯ");
+    expect(repository.walletBalance("admin-allin")).toBe(0n);
+  });
+
   it("rejects a non-admin", async () => {
     const reply = await handleWalletCommand(message({}), "/nap 100", deps(false));
     expect(reply).toMatch(/không có quyền/);
@@ -103,6 +118,27 @@ describe("/nap and /tru", () => {
 });
 
 describe("/chuyen", () => {
+  it("atomically transfers the sender's entire balance with allin", async () => {
+    repository.adjustWalletBalance("sender-allin", 7_654_321n);
+    const reply = await handleWalletCommand(
+      message({
+        senderId: "sender-allin",
+        senderIds: ["sender-allin"],
+        senderName: "Người gửi allin",
+        content: "@MbaLong @Lan /chuyen allin",
+        mentions: [
+          { uid: "9000000009", pos: 0, len: 8 },
+          { uid: "recipient-allin", pos: 9, len: 4 },
+        ],
+      }),
+      "@Lan /chuyen allin",
+      deps(false),
+    );
+    expect(reply).toContain("CHUYỂN TIỀN THÀNH CÔNG");
+    expect(repository.walletBalance("sender-allin")).toBe(0n);
+    expect(repository.walletBalance("recipient-allin")).toBe(7_654_321n);
+  });
+
   it("atomically subtracts the sender and credits the tagged recipient", async () => {
     repository.adjustWalletBalance("sender-transfer", 5000n);
     const content = "@MbaLong @Lan /chuyen 3000";

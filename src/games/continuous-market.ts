@@ -69,6 +69,7 @@ export const continuousMarketGuide = [
   "• @MbaLong /chot — đóng vị thế thủ công",
   "",
   "Đòn bẩy /choicho: từ 1x đến tối đa 1000x.",
+  "/choicho mặc định dùng toàn bộ số dư, tương đương allin.",
   "SL/TP tính theo số dư lúc mở. Ví dụ SL 0.5x đóng khi còn 50%, TP 2x đóng khi số dư gấp đôi.",
   "PnL được cộng hoặc trừ trực tiếp vào số dư mỗi giây. Số dư về 0 thì cháy ví và tự đóng.",
 ].join("\n");

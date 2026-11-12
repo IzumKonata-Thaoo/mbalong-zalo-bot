@@ -6,13 +6,27 @@ import {
 } from "./tai-xiu-rules.js";
 
 describe("tài xỉu", () => {
-  it("accepts only an integer amount without currency suffix", () => {
+  it("accepts compact Vietnamese amounts and all-in", () => {
     expect(parseTaiXiu("/tx tài 1000")).toEqual({
       kind: "bet",
       choice: "tai",
       amount: 1000n,
     });
-    expect(parseTaiXiu("/tx xỉu 10k")).toEqual({ kind: "invalid" });
+    expect(parseTaiXiu("/tx xỉu 10k")).toEqual({
+      kind: "bet",
+      choice: "xiu",
+      amount: 10_000n,
+    });
+    expect(parseTaiXiu("/tx tài 1tỷ")).toEqual({
+      kind: "bet",
+      choice: "tai",
+      amount: 1_000_000_000n,
+    });
+    expect(parseTaiXiu("/tx tài allin")).toEqual({
+      kind: "bet",
+      choice: "tai",
+      amount: "allin",
+    });
   });
   it("treats triples as house wins", () => {
     expect(resolveTaiXiu([6, 6, 6])).toBe("triple");

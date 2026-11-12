@@ -23,6 +23,24 @@ afterAll(() => {
 });
 
 describe("tai xiu jackpot", () => {
+  it("resolves all-in to the entire live wallet balance", () => {
+    repository.setSettings({
+      "games.tai_xiu_win_rate": "0",
+      "games.jackpot_rate": "0",
+      "games.wipeout_rate": "0",
+    });
+    repository.adjustWalletBalance("allin-player", 12_345n);
+
+    const response = handleTaiXiu(
+      "allin-player",
+      "/tx tài allin",
+      "All In",
+    );
+
+    expect(response).toContain("Mức cược 12.345");
+    expect(repository.walletBalance("allin-player")).toBe(0n);
+  });
+
   it("credits the configured jackpot to the shared wallet and leaderboard", () => {
     repository.setSettings({
       "games.tai_xiu_win_rate": "100",

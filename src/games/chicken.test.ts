@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { IncomingGroupMessage } from "../types.js";
 
 const dir = mkdtempSync(join(tmpdir(), "mbalong-chicken-"));
 process.env.ADMIN_PASSWORD = "test-password-123456";
@@ -15,6 +16,7 @@ let renderChickenPkBanner: typeof import("./chicken-pk-image.js").renderChickenP
 let chickenClawItem: typeof import("./chicken-equipment.js").chickenClawItem;
 let chickenPinMatches: typeof import("../http/chicken-auth.js").chickenPinMatches;
 let hashChickenPin: typeof import("../http/chicken-auth.js").hashChickenPin;
+let handleChickenCommand: typeof import("./chicken.js").handleChickenCommand;
 
 beforeAll(async () => {
   ({ repository, db } = await import("../db.js"));
@@ -22,6 +24,7 @@ beforeAll(async () => {
   ({ renderChickenPkBanner } = await import("./chicken-pk-image.js"));
   ({ chickenClawItem } = await import("./chicken-equipment.js"));
   ({ chickenPinMatches, hashChickenPin } = await import("../http/chicken-auth.js"));
+  ({ handleChickenCommand } = await import("./chicken.js"));
   repository.upsertGroup("g-chicken", "Nhóm gà", 2);
 });
 
@@ -42,6 +45,38 @@ function createChicken(id: string, name: string) {
 }
 
 describe("chicken persistence and wallet settlement", () => {
+  it("locks a chicken challenge to the challenger's full balance with allin", async () => {
+    createChicken("pk-allin-a", "Gà All In A");
+    createChicken("pk-allin-b", "Gà All In B");
+    repository.adjustWalletBalance("pk-allin-a", 123_456n);
+    repository.adjustWalletBalance("pk-allin-b", 999_999n);
+    repository.upsertMembers("g-chicken", [
+      { id: "pk-allin-a", name: "A", role: "member" },
+      { id: "pk-allin-b", name: "B", role: "member" },
+    ]);
+    const message: IncomingGroupMessage = {
+      groupId: "g-chicken",
+      senderId: "pk-allin-a",
+      senderIds: ["pk-allin-a"],
+      senderName: "A",
+      content: "/pk @B allin",
+      messageId: "pk-allin-message",
+      mentions: [{ uid: "pk-allin-b", pos: 4, len: 2 }],
+      raw: {},
+    };
+
+    const response = await handleChickenCommand(
+      message,
+      "/pk @B allin",
+      { botIds: new Set(), isReplyToBot: () => false },
+    );
+
+    expect(response?.message).toContain("Cược mỗi bên: 123.456");
+    expect(
+      repository.pendingChickenChallenge("g-chicken", "pk-allin-b")?.stake,
+    ).toBe("123456");
+  });
+
   it("atomically charges an expensive upgrade and increases every stat", () => {
     const chicken = createChicken("upgrade-user", "Kim Kê");
     repository.adjustWalletBalance("upgrade-user", 2_000_000_000n);

@@ -4,6 +4,10 @@ import { formatBetAmount } from "./tai-xiu-rules.js";
 import { configuredWin, getGameSettings } from "./game-settings.js";
 import { resolveJackpot, resolveWipeout } from "./jackpot.js";
 import {
+  resolveAmountExpression,
+  type AmountExpression,
+} from "./amount.js";
+import {
   MARKET_MAX_SETTLE_MS,
   MARKET_MIN_SETTLE_MS,
   MARKET_SESSION_MS,
@@ -52,8 +56,8 @@ export const marketGuide = [
   "📈 LONG/SHORT · THỊ TRƯỜNG ẢO",
   "",
   "• @MbaLong /market btc — xem biểu đồ XAU, BTC hoặc ETH",
-  "• @MbaLong /long btc 10000 10x 30s",
-  "• @MbaLong /short eth 10000 20x 2m",
+  "• @MbaLong /long btc 1tr 10x 30s",
+  "• @MbaLong /short eth allin 20x 2m",
   "• @MbaLong /choicho btc long 10x sl 0.5x tp 2x",
   "• @MbaLong /chot — đóng vị thế chạy liên tục",
   "• @MbaLong /lenh — xem vị thế đang chạy",
@@ -61,6 +65,7 @@ export const marketGuide = [
   "• @MbaLong /bxh — xem bảng xếp hạng hai trò",
   "",
   "Đòn bẩy: nhập số nguyên dương bất kỳ, không giới hạn mức tối đa.",
+  "Tiền cược hỗ trợ số thường, 500k, 2tr, 1tỷ và allin.",
   "Thắng tính đủ đòn bẩy; thua thường tính 1/10 đòn bẩy và ví không xuống dưới 0.",
   "Khung chốt mô phỏng: 5s–5m (ví dụ 30s, 2m). Khung dài có thể tạo biên độ lớn hơn.",
   "Bot luôn trả kết quả sau khoảng 5–7 giây. Nếu số dư về 0 lúc đang xử lý, bot tự đóng lệnh.",
@@ -89,7 +94,7 @@ export function openMarketPosition(input: {
   senderId: string;
   senderName: string;
   side: MarketSide;
-  stake: bigint;
+  stake: AmountExpression;
   leverage: bigint;
   symbol?: MarketSymbol;
   settleAfterMs?: number;
@@ -97,9 +102,11 @@ export function openMarketPosition(input: {
 }): { ok: true; position: OpenMarketPosition } | { ok: false; message: string } {
   const now = input.now ?? Date.now();
   const key = positionKey(input.groupId, input.senderId);
+  const balance = repository.walletBalance(input.senderId);
+  const stake = resolveAmountExpression(input.stake, balance);
   if (activePositions.has(key))
     return { ok: false, message: "Bạn đang có một vị thế chờ chốt. Hãy đợi kết quả trước khi mở lệnh mới." };
-  if (input.stake <= 0n)
+  if (stake <= 0n)
     return { ok: false, message: "Số tiền vào lệnh phải là số nguyên dương." };
   if (input.leverage <= 0n)
     return { ok: false, message: "Đòn bẩy phải là số nguyên dương." };
@@ -113,11 +120,10 @@ export function openMarketPosition(input: {
       ok: false,
       message: "Thời gian chốt phải từ 5 giây đến 5 phút.",
     };
-  const balance = repository.walletBalance(input.senderId);
-  if (balance < input.stake)
+  if (balance < stake)
     return {
       ok: false,
-      message: `Số dư không đủ.\n\nSố dư: ${formatBetAmount(balance)}\nTiền vào lệnh: ${formatBetAmount(input.stake)}`,
+      message: `Số dư không đủ.\n\nSố dư: ${formatBetAmount(balance)}\nTiền vào lệnh: ${formatBetAmount(stake)}`,
     };
   const market = currentVirtualMarket(input.groupId, now, input.symbol ?? "xau");
   const processingDelay = randomInt(5_000, 7_001);
@@ -128,7 +134,7 @@ export function openMarketPosition(input: {
     senderId: input.senderId,
     senderName: input.senderName,
     side: input.side,
-    stake: input.stake,
+    stake,
     leverage: input.leverage,
     entryPrice: marketPriceAt(market, now),
     openedAt: now,

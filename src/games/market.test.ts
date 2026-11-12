@@ -24,6 +24,22 @@ afterAll(() => {
 });
 
 describe("market wallet settlement", () => {
+  it("opens an all-in position with the entire live wallet", () => {
+    repository.adjustWalletBalance("market-allin", 123_456n);
+    const opened = market.openMarketPosition({
+      groupId: "g-market",
+      senderId: "market-allin",
+      senderName: "Market All In",
+      side: "long",
+      stake: "allin",
+      leverage: 10n,
+    });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    expect(opened.position.stake).toBe(123_456n);
+    market.cancelMarketPosition(opened.position);
+  });
+
   it("keeps full winning leverage but charges one tenth on the losing side", () => {
     expect(market.calculateFixedMarketPnl(1_000n, 1_000n, true)).toBe(1_000_000n);
     expect(market.calculateFixedMarketPnl(1_000n, 1_000n, false)).toBe(-100_000n);

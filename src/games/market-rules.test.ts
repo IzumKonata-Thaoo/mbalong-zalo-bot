@@ -21,6 +21,19 @@ describe("virtual long/short market", () => {
       stake: 5000n,
       leverage: 10n,
     });
+    expect(parseMarketCommand("/long btc 1tỷ 100x")).toEqual({
+      kind: "position",
+      side: "long",
+      symbol: "btc",
+      stake: 1_000_000_000n,
+      leverage: 100n,
+    });
+    expect(parseMarketCommand("/short allin 10x")).toEqual({
+      kind: "position",
+      side: "short",
+      stake: "allin",
+      leverage: 10n,
+    });
     expect(parseMarketCommand("/long 10000 20x 30s")).toEqual({
       kind: "position",
       side: "long",

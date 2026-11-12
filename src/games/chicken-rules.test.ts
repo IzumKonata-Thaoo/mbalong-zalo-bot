@@ -12,6 +12,8 @@ describe("chicken game rules", () => {
     expect(parseChickenCommand("/ga")).toEqual({ kind: "view" });
     expect(parseChickenCommand("/nangga")).toEqual({ kind: "upgrade" });
     expect(parseChickenCommand("/pk @Lan 1 tỷ tỷ")).toEqual({ kind: "challenge", stake: 10n ** 18n });
+    expect(parseChickenCommand("/pk @Lan 1tỷ")).toEqual({ kind: "challenge", stake: 1_000_000_000n });
+    expect(parseChickenCommand("/pk @Lan allin")).toEqual({ kind: "challenge", stake: "allin" });
     expect(parseChickenCommand("/y")).toEqual({ kind: "accept" });
     expect(parseChickenCommand("/tuchoi")).toEqual({ kind: "decline" });
   });

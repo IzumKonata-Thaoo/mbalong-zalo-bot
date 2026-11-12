@@ -1,4 +1,4 @@
-import { amountAtEnd } from "./amount.js";
+import { amountAtEnd, type AmountExpression } from "./amount.js";
 
 export type ChickenCommand =
   | { kind: "help" }
@@ -6,7 +6,7 @@ export type ChickenCommand =
   | { kind: "view" }
   | { kind: "rename"; name: string }
   | { kind: "upgrade" }
-  | { kind: "challenge"; stake: bigint }
+  | { kind: "challenge"; stake: AmountExpression }
   | { kind: "accept" }
   | { kind: "decline" }
   | { kind: "invalid" };
@@ -18,10 +18,11 @@ export const chickenGuide = [
   "• @MbaLong /ga — xem ảnh và chỉ số gà",
   "• @MbaLong /datten Tên mới — đổi tên gà",
   "• @MbaLong /nangga — nâng level bằng số dư",
-  "• @MbaLong /pk @ĐốiThủ 1 tỷ — gạ kèo trong 5 phút",
+  "• @MbaLong /pk @ĐốiThủ 1tỷ — gạ kèo trong 5 phút",
+  "• @MbaLong /pk @ĐốiThủ allin — cược toàn bộ số dư",
   "• Reply kèo bằng /y để nhận hoặc /tuchoi để từ chối",
   "",
-  "Tiền cược hỗ trợ: 2 triệu, 1,5 tỷ, 1 tỷ tỷ, 1 tỷ tỷ tỷ…",
+  "Tiền cược hỗ trợ: 500k, 2tr, 1,5tỷ, allin, 1 tỷ tỷ…",
 ].join("\n");
 
 export function parseChickenCommand(input: string): ChickenCommand | null {

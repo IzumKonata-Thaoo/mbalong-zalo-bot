@@ -111,15 +111,17 @@ Xoá ngữ cảnh (bộ nhớ hội thoại và bản tóm tắt của nhóm) đ
 
 ## Trò chơi tài xỉu
 
-Người chơi có thể chuyển số dư cho thành viên khác trong cùng nhóm bằng `@MbaLong @NgườiNhận /chuyen 10000` hoặc `@MbaLong /chuyen ZALO_ID 10000`. Việc trừ ví người gửi và cộng ví người nhận diễn ra trong cùng một giao dịch database; nếu không đủ tiền thì cả hai ví đều không thay đổi.
+Người chơi có thể chuyển số dư cho thành viên khác trong cùng nhóm bằng `@MbaLong @NgườiNhận /chuyen 1tr`, `@MbaLong /chuyen ZALO_ID 1tỷ` hoặc `/chuyen ... allin`. Việc trừ ví người gửi và cộng ví người nhận diễn ra trong cùng một giao dịch database; nếu không đủ tiền thì cả hai ví đều không thay đổi.
+
+Mọi trò có nhập tiền đều dùng chung cú pháp gọn: số thường, `500k`, `2tr`, `1.5tr`, `1tỷ`, `1.5tỷ`, các cấp `tỷ tỷ` và `allin`. `allin` được chốt thành toàn bộ số dư tại thời điểm bot xử lý lệnh. Riêng `/choicho` vốn đã vận hành trực tiếp trên toàn bộ số dư nên mặc định là all-in.
 
 Số tiền cược và số dư được lưu chính xác theo Zalo UID bằng chuỗi số nguyên trong SQLite; bot dùng `BigInt` nên không giới hạn bởi kiểu số JavaScript và không dùng đơn vị tiền tệ. Người chơi phải có đủ số dư trước khi cược. Thắng được cộng đúng một lần mức cược, thua hoặc ra bộ ba bị trừ mức cược.
 Các mức từ một triệu trở lên được hiển thị rút gọn, ví dụ `1 triệu`, `1,5 triệu`, `2 tỷ`.
 
 ```text
 @MbaLong /sodu
-@MbaLong /tx tài 1000
-@MbaLong /tx xỉu 500
+@MbaLong /tx tài 1tr
+@MbaLong /tx xỉu allin
 ```
 
 ## Long/Short trên thị trường ảo
@@ -131,8 +133,8 @@ Long/Short dùng chung số dư với tài xỉu. Mỗi nhóm có các đường
 @MbaLong /market btc
 @MbaLong /market eth
 @MbaLong /trade
-@MbaLong /long btc 10000 10x 30s
-@MbaLong /short eth 5000 20x 2m
+@MbaLong /long btc 1tr 10x 30s
+@MbaLong /short eth allin 20x 2m
 @MbaLong /bxh
 ```
 
@@ -174,7 +176,8 @@ Mỗi Zalo ID sở hữu tối đa một chiến kê. Gà có level, độ sung,
 @MbaLong /ga
 @MbaLong /datten Lôi Kê
 @MbaLong /nangga
-@MbaLong /pk @ĐốiThủ 1 tỷ
+@MbaLong /pk @ĐốiThủ 1tỷ
+@MbaLong /pk @ĐốiThủ allin
 ```
 
 Người bị gạ reply trực tiếp tin nhắn kèo bằng `/y` để nhận hoặc `/tuchoi` để từ chối; không cần tag lại bot trong reply. Kèo tồn tại 5 phút. Khi nhận kèo, bot kiểm tra lại số dư của cả hai, trừ cùng mức cược và trả toàn bộ pot cho người thắng trong một transaction SQLite. Thiếu tiền ở bất kỳ bên nào thì không ví nào bị thay đổi.
@@ -190,10 +193,10 @@ Tên gà có thể đặt ngay khi `/nuoiga [tên]`, đổi bằng `/datten [tê
 Zalo UID có trong `ZALO_ADMIN_IDS` hoặc admin thật của group được cộng/trừ số dư. Không tag thêm ai thì lệnh áp dụng cho chính admin; muốn chỉnh thành viên khác, tag người đó hoặc nhập Zalo ID:
 
 ```text
-@MbaLong /nap 10000
-@MbaLong @NgườiDùng /nap 10000
-@MbaLong /nap 123456789 10000
-@MbaLong @NgườiDùng /tru 5000
+@MbaLong /nap 1tr
+@MbaLong @NgườiDùng /nap 1tỷ
+@MbaLong /nap 123456789 500k
+@MbaLong @NgườiDùng /tru allin
 ```
 
 ### Tìm và phát nhạc
@@ -237,8 +240,8 @@ DeepSeek dùng định dạng `OpenAI-compatible`. Trong web admin, bấm **Đi�
 
 ```text
 @MbaLong /tx
-@MbaLong /tx tài 1000
-@MbaLong /tx xỉu 500
+@MbaLong /tx tài 1tr
+@MbaLong /tx xỉu allin
 ```
 
 Ba xúc xắc giống nhau là bộ ba và nhà cái thắng. Các lượt của cùng một người được giữ đúng thứ tự trong từng luồng; nhiều thành viên trong nhóm vẫn được xử lý độc lập.

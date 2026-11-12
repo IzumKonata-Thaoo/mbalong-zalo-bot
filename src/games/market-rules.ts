@@ -1,3 +1,5 @@
+import { parseAmountExpression, type AmountExpression } from "./amount.js";
+
 export const MARKET_SESSION_MS = 5 * 60 * 60 * 1_000;
 export const MARKET_HISTORY_SECONDS = 60 * 60;
 export const MARKET_MIN_SETTLE_MS = 5_000;
@@ -12,7 +14,7 @@ export type MarketCommand =
   | {
       kind: "position";
       side: MarketSide;
-      stake: bigint;
+      stake: AmountExpression;
       leverage: bigint;
       settleAfterMs?: number;
       symbol?: MarketSymbol;
@@ -60,9 +62,11 @@ export function parseMarketCommand(input: string): MarketCommand | null {
     rest = rest.slice(symbolMatch[0].length);
   }
   const match = rest.match(
-    /^([1-9]\d*)\s+(?:x(\d+)|(\d+)x)(?:\s+([1-9]\d*)\s*(s|m|giây|giay|phút|phut)?)?$/i,
+    /^(.+?)\s+(?:x(\d+)|(\d+)x)(?:\s+([1-9]\d*)\s*(s|m|giây|giay|phút|phut)?)?$/i,
   );
   if (!match) return { kind: "invalid" };
+  const stake = parseAmountExpression(match[1]!);
+  if (stake === null) return { kind: "invalid" };
   const leverage = BigInt(match[2] ?? match[3]!);
   if (leverage <= 0n) return { kind: "invalid" };
   let settleAfterMs: number | undefined;
@@ -81,7 +85,7 @@ export function parseMarketCommand(input: string): MarketCommand | null {
   return {
     kind: "position",
     side: marker[1]!.toLowerCase() as MarketSide,
-    stake: BigInt(match[1]!),
+    stake,
     leverage,
     ...(settleAfterMs ? { settleAfterMs } : {}),
     ...(symbol && symbol !== "xau" ? { symbol } : {}),

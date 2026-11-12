@@ -1,14 +1,19 @@
+import {
+  amountExpressionAtEnd,
+  type AmountExpression,
+} from "./amount.js";
+
 export type WalletCommand =
   | { kind: "balance" }
   | {
       kind: "transfer";
-      amount: bigint;
+      amount: AmountExpression;
       explicitTargetId?: string;
     }
   | {
       kind: "adjust";
       operation: "add" | "subtract";
-      amount: bigint;
+      amount: AmountExpression;
       explicitTargetId?: string;
     }
   | { kind: "invalid" };
@@ -21,30 +26,32 @@ export function parseWalletCommand(input: string): WalletCommand | null {
     const rest = text
       .slice(transferMarker.index + transferMarker[0].length)
       .trim();
-    const direct = rest.match(/^(\d+)\s+([1-9]\d*)$/);
-    if (direct)
-      return {
-        kind: "transfer",
-        explicitTargetId: direct[1],
-        amount: BigInt(direct[2]!),
-      };
-    const amount = rest.match(/([1-9]\d*)\s*$/);
-    if (!amount) return { kind: "invalid" };
-    return { kind: "transfer", amount: BigInt(amount[1]!) };
+    const parsed = amountExpressionAtEnd(rest);
+    if (!parsed) return { kind: "invalid" };
+    const beforeAmount = rest.slice(0, parsed.start).trim();
+    const explicitTargetId = /^\d+$/.test(beforeAmount)
+      ? beforeAmount
+      : undefined;
+    return {
+      kind: "transfer",
+      amount: parsed.amount,
+      ...(explicitTargetId ? { explicitTargetId } : {}),
+    };
   }
   const marker = text.match(/\/(nap|tru)\b/i);
   if (!marker || marker.index === undefined) return null;
   const operation = marker[1]!.toLowerCase() === "nap" ? "add" : "subtract";
   const rest = text.slice(marker.index + marker[0].length).trim();
-  const direct = rest.match(/^(\d+)\s+([1-9]\d*)$/);
-  if (direct)
-    return {
-      kind: "adjust",
-      operation,
-      explicitTargetId: direct[1],
-      amount: BigInt(direct[2]!),
-    };
-  const amount = rest.match(/([1-9]\d*)\s*$/);
-  if (!amount) return { kind: "invalid" };
-  return { kind: "adjust", operation, amount: BigInt(amount[1]!) };
+  const parsed = amountExpressionAtEnd(rest);
+  if (!parsed) return { kind: "invalid" };
+  const beforeAmount = rest.slice(0, parsed.start).trim();
+  const explicitTargetId = /^\d+$/.test(beforeAmount)
+    ? beforeAmount
+    : undefined;
+  return {
+    kind: "adjust",
+    operation,
+    amount: parsed.amount,
+    ...(explicitTargetId ? { explicitTargetId } : {}),
+  };
 }

@@ -2,19 +2,20 @@ import { repository } from "../db.js";
 import type { IncomingGroupMessage } from "../types.js";
 import { formatBetAmount } from "./tai-xiu-rules.js";
 import { parseWalletCommand } from "./wallet-rules.js";
+import { resolveAmountExpression } from "./amount.js";
 
 const adjustGuide = [
   "Cách dùng admin:",
-  "• @MbaLong /nap 10000 — cộng cho chính admin",
-  "• @MbaLong @NgườiDùng /nap 10000",
-  "• @MbaLong /nap ZALO_ID 10000",
-  "• Đổi /nap thành /tru để trừ số dư",
+  "• @MbaLong /nap 1tr — cộng cho chính admin",
+  "• @MbaLong @NgườiDùng /nap 1tỷ",
+  "• @MbaLong /nap ZALO_ID 500k",
+  "• Đổi /nap thành /tru để trừ số dư; /tru allin để trừ hết",
 ].join("\n");
 
 const transferGuide = [
   "Cách chuyển tiền:",
-  "• @MbaLong @NgườiNhận /chuyen 10000",
-  "• @MbaLong /chuyen ZALO_ID 10000",
+  "• @MbaLong @NgườiNhận /chuyen 1tr",
+  "• @MbaLong /chuyen ZALO_ID allin",
 ].join("\n");
 
 export interface WalletDeps {
@@ -80,14 +81,19 @@ export async function handleWalletCommand(
     if (isBot(targetId)) return "Không thể chuyển tiền cho tài khoản bot.";
     if (targetId === message.senderId)
       return "Không thể chuyển tiền cho chính mình.";
+    const amount = resolveAmountExpression(
+      command.amount,
+      repository.walletBalance(message.senderId),
+    );
+    if (amount <= 0n) return "Số dư phải lớn hơn 0 để chuyển allin.";
     const result = repository.transferWalletBalance(
       message.senderId,
       targetId,
-      command.amount,
+      amount,
     );
     if (!result.ok)
       return result.reason === "insufficient"
-        ? `Số dư không đủ.\n\nSố dư hiện tại: ${formatBetAmount(result.senderBalance)}\nSố tiền muốn chuyển: ${formatBetAmount(command.amount)}`
+        ? `Số dư không đủ.\n\nSố dư hiện tại: ${formatBetAmount(result.senderBalance)}\nSố tiền muốn chuyển: ${formatBetAmount(amount)}`
         : "Không thể thực hiện giao dịch này.";
     const member = repository.member(message.groupId, targetId);
     const mentionName = mentionedTargets.length
@@ -97,23 +103,30 @@ export async function handleWalletCommand(
       member?.display_name ?? (mentionName || `Zalo ${targetId}`);
     repository.audit(message.senderId, "wallet.transfer", targetId, {
       groupId: message.groupId,
-      amount: command.amount.toString(),
+      amount: amount.toString(),
       senderBalanceBefore: result.senderPrevious.toString(),
       senderBalanceAfter: result.senderBalance.toString(),
       recipientBalanceBefore: result.recipientPrevious.toString(),
       recipientBalanceAfter: result.recipientBalance.toString(),
     });
-    return `💸 CHUYỂN TIỀN THÀNH CÔNG\n\nNgười gửi: ${message.senderName}\nNgười nhận: ${targetName}\nSố tiền: ${formatBetAmount(command.amount)}\n\nSố dư người gửi: ${formatBetAmount(result.senderBalance)}\nSố dư người nhận: ${formatBetAmount(result.recipientBalance)}`;
+    return `💸 CHUYỂN TIỀN THÀNH CÔNG\n\nNgười gửi: ${message.senderName}\nNgười nhận: ${targetName}\nSố tiền: ${formatBetAmount(amount)}\n\nSố dư người gửi: ${formatBetAmount(result.senderBalance)}\nSố dư người nhận: ${formatBetAmount(result.recipientBalance)}`;
   }
 
   if (!(await deps.isAdmin(message)))
     return "Bạn không có quyền thực hiện lệnh này. Chỉ trưởng nhóm, phó nhóm hoặc Zalo ID trong ZALO_ADMIN_IDS được cộng/trừ số dư.";
 
+  if (command.operation === "add" && command.amount === "allin")
+    return "Không thể dùng allin với /nap. Hãy nhập số tiền muốn cộng.";
   const member = repository.member(message.groupId, targetId);
-  const delta = command.operation === "add" ? command.amount : -command.amount;
+  const amount = resolveAmountExpression(
+    command.amount,
+    repository.walletBalance(targetId),
+  );
+  if (amount <= 0n) return "Số dư tài khoản đang bằng 0.";
+  const delta = command.operation === "add" ? amount : -amount;
   const result = repository.adjustWalletBalance(targetId, delta);
   if (!result.ok)
-    return `Không thể trừ ${formatBetAmount(command.amount)} vì số dư hiện tại chỉ có ${formatBetAmount(result.balance)}.`;
+    return `Không thể trừ ${formatBetAmount(amount)} vì số dư hiện tại chỉ có ${formatBetAmount(result.balance)}.`;
 
   const mentionName = mentionedTargets.length
     ? mentionText(message, (uid) => !isBot(uid))
@@ -129,13 +142,13 @@ export async function handleWalletCommand(
     targetId,
     {
       groupId: message.groupId,
-      amount: command.amount.toString(),
+      amount: amount.toString(),
       balanceBefore: result.previous.toString(),
       balanceAfter: result.balance.toString(),
     },
   );
   const action = command.operation === "add" ? "CỘNG SỐ DƯ" : "TRỪ SỐ DƯ";
-  return `💳 ${action}\n\nTài khoản: ${targetName}\nZalo ID: ${targetId}\nSố tiền: ${formatBetAmount(command.amount)}\nSố dư mới: ${formatBetAmount(result.balance)}`;
+  return `💳 ${action}\n\nTài khoản: ${targetName}\nZalo ID: ${targetId}\nSố tiền: ${formatBetAmount(amount)}\nSố dư mới: ${formatBetAmount(result.balance)}`;
 }
 
 function mentionText(

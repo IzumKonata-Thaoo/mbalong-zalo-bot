@@ -13,6 +13,7 @@ import {
 import { formatBetAmount } from "./tai-xiu-rules.js";
 import { chickenClawItem } from "./chicken-equipment.js";
 import { renderChickenPkBanner } from "./chicken-pk-image.js";
+import { resolveAmountExpression } from "./amount.js";
 
 const CHALLENGE_TTL_MS = 5 * 60_000;
 const lines = (...items: string[]) => items.join("\n");
@@ -127,9 +128,15 @@ export async function handleChickenCommand(
   }
 
   if (command.kind === "challenge") {
+    const stake = resolveAmountExpression(
+      command.stake,
+      repository.walletBalance(message.senderId),
+    );
+    if (stake <= 0n)
+      return { message: "Số dư phải lớn hơn 0 để gạ kèo allin." };
     const targets = targetMentions(message, deps.botIds);
     if (targets.length !== 1)
-      return { message: "Hãy tag đúng một người muốn PK. Ví dụ: @MbaLong /pk @ĐốiThủ 1 tỷ" };
+      return { message: "Hãy tag đúng một người muốn PK. Ví dụ: @MbaLong /pk @ĐốiThủ 1tỷ" };
     const target = targets[0]!;
     if (target.canonicalId === message.senderId)
       return { message: "Không thể tự gạ kèo với chính mình." };
@@ -142,7 +149,7 @@ export async function handleChickenCommand(
       left: { chicken: ownChicken, ownerName: message.senderName, equipment: ownEquipment },
       right: { chicken: targetChicken, ownerName: target.name, equipment: challengedEquipment },
       state: "challenge",
-      stake: command.stake,
+      stake,
     });
     const now = Date.now();
     const created = repository.createChickenChallenge({
@@ -152,19 +159,19 @@ export async function handleChickenCommand(
       challengerName: message.senderName,
       targetId: target.canonicalId,
       targetName: target.name,
-      stake: command.stake,
+      stake,
       now,
       expiresAt: now + CHALLENGE_TTL_MS,
     });
     if (!created.ok)
       return {
         message: created.reason === "insufficient"
-          ? lines("Bạn không đủ tiền để gạ kèo.", "", "Tiền cược: " + formatBetAmount(command.stake), "Số dư: " + formatBetAmount(created.balance))
+          ? lines("Bạn không đủ tiền để gạ kèo.", "", "Tiền cược: " + formatBetAmount(stake), "Số dư: " + formatBetAmount(created.balance))
           : "Một trong hai người đang có kèo PK chờ xử lý. Hãy nhận, từ chối hoặc đợi kèo hết hạn.",
       };
     repository.audit(message.senderId, "chicken.challenge", target.canonicalId, {
       groupId: message.groupId,
-      stake: command.stake.toString(),
+      stake: stake.toString(),
       expiresAt: now + CHALLENGE_TTL_MS,
     });
     return {
@@ -175,8 +182,8 @@ export async function handleChickenCommand(
         "",
         message.senderName + " (" + ownChicken.name + " · " + ownEquipment.name + " · LC " + chickenPower(ownChicken, ownEquipment.powerBonus).toLocaleString("vi-VN") + ") gạ @" + target.name + " (" + targetChicken.name + " · " + challengedEquipment.name + " · LC " + chickenPower(targetChicken, challengedEquipment.powerBonus).toLocaleString("vi-VN") + ")",
         "",
-        "Cược mỗi bên: " + formatBetAmount(command.stake),
-        "Tổng pot: " + formatBetAmount(command.stake * 2n),
+        "Cược mỗi bên: " + formatBetAmount(stake),
+        "Tổng pot: " + formatBetAmount(stake * 2n),
         "Kèo hết hạn sau 5 phút.",
         "",
         "@" + target.name + " hãy reply tin nhắn này bằng /y để nhận hoặc /tuchoi để từ chối.",
