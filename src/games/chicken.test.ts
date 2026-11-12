@@ -11,12 +11,16 @@ process.env.DATABASE_PATH = join(dir, "bot.db");
 let repository: typeof import("../db.js").repository;
 let db: typeof import("../db.js").db;
 let renderChickenImage: typeof import("./chicken-image.js").renderChickenImage;
+let renderChickenPkBanner: typeof import("./chicken-pk-image.js").renderChickenPkBanner;
+let chickenClawItem: typeof import("./chicken-equipment.js").chickenClawItem;
 let chickenPinMatches: typeof import("../http/chicken-auth.js").chickenPinMatches;
 let hashChickenPin: typeof import("../http/chicken-auth.js").hashChickenPin;
 
 beforeAll(async () => {
   ({ repository, db } = await import("../db.js"));
   ({ renderChickenImage } = await import("./chicken-image.js"));
+  ({ renderChickenPkBanner } = await import("./chicken-pk-image.js"));
+  ({ chickenClawItem } = await import("./chicken-equipment.js"));
   ({ chickenPinMatches, hashChickenPin } = await import("../http/chicken-auth.js"));
   repository.upsertGroup("g-chicken", "Nhóm gà", 2);
 });
@@ -135,6 +139,29 @@ describe("chicken persistence and wallet settlement", () => {
     const image = await renderChickenImage(chicken, "Chủ kê");
     expect(image.subarray(1, 4).toString()).toBe("PNG");
     expect(image.length).toBeGreaterThan(10_000);
+  });
+
+  it("renders both the fiery VS banner and the win/lose result banner", async () => {
+    const left = createChicken("banner-left", "Hỏa Kê");
+    const right = createChicken("banner-right", "Băng Kê");
+    const common = {
+      left: { chicken: left, ownerName: "Người A", equipment: chickenClawItem("gold") },
+      right: { chicken: right, ownerName: "Người B", equipment: chickenClawItem("diamond") },
+      stake: 1_000_000_000n,
+    };
+    const challenge = await renderChickenPkBanner({ ...common, state: "challenge" });
+    const result = await renderChickenPkBanner({
+      ...common,
+      state: "result",
+      winnerId: left.zalo_id,
+      left: { ...common.left, score: 1234 },
+      right: { ...common.right, score: 1100 },
+    });
+    expect(challenge.subarray(1, 4).toString()).toBe("PNG");
+    expect(result.subarray(1, 4).toString()).toBe("PNG");
+    expect(challenge.length).toBeGreaterThan(20_000);
+    expect(result.length).toBeGreaterThan(20_000);
+    expect(result.equals(challenge)).toBe(false);
   });
 
   it("atomically buys and equips a claw with the same wallet used by Zalo", () => {

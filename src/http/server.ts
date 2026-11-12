@@ -62,6 +62,7 @@ const attempts = new Map<string, { count: number; reset: number }>();
 const chickenAttempts = new Map<string, { count: number; reset: number }>();
 const chickenPinSchema = z.object({ pin: z.string().regex(/^\d{4,12}$/) });
 const chickenTokenSchema = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{24,64}$/) });
+const chickenNameSchema = z.object({ name: z.string().trim().min(1).max(30) });
 
 function chickenRateLimited(key: string) {
   const now = Date.now();
@@ -211,6 +212,15 @@ export function createServer() {
     } catch (error) {
       next(error);
     }
+  });
+  app.post("/api/chicken/:token/name", requireChickenSession, (req: ChickenAuthRequest, res) => {
+    const parsed = chickenNameSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Tên gà phải có từ 1 đến 30 ký tự" });
+    const name = parsed.data.name.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
+    const renamed = repository.renameChicken(req.chickenAuth!.zaloId, name);
+    if (!renamed) return res.status(404).json({ error: "Không tìm thấy gà chiến" });
+    repository.audit(req.chickenAuth!.zaloId, "chicken.web_rename", req.chickenAuth!.zaloId, { name });
+    res.json(chickenGaragePayload(req.chickenAuth!.zaloId));
   });
   app.post("/api/chicken/:token/equipment/:itemId", requireChickenSession, (req: ChickenAuthRequest, res) => {
     const item = CHICKEN_CLAW_ITEMS.find((candidate) => candidate.id === req.params.itemId);

@@ -63,6 +63,14 @@ describe("chicken garage API", () => {
     expect(garage).toMatchObject({ balance: "2000000000", equippedItem: "bare" });
     expect(garage.items).toHaveLength(7);
 
+    const renamed = await fetch(`${origin}/api/chicken/${token}/name`, {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify({ name: "Hỏa Thần Kê" }),
+    }).then((response) => response.json());
+    expect(renamed.chicken.name).toBe("Hỏa Thần Kê");
+    expect(repository.chicken("api-user")?.name).toBe("Hỏa Thần Kê");
+
     const purchase = await fetch(`${origin}/api/chicken/${token}/equipment/iron`, {
       method: "POST",
       headers,

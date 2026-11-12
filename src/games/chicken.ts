@@ -12,6 +12,7 @@ import {
 } from "./chicken-rules.js";
 import { formatBetAmount } from "./tai-xiu-rules.js";
 import { chickenClawItem } from "./chicken-equipment.js";
+import { renderChickenPkBanner } from "./chicken-pk-image.js";
 
 const CHALLENGE_TTL_MS = 5 * 60_000;
 const lines = (...items: string[]) => items.join("\n");
@@ -137,6 +138,12 @@ export async function handleChickenCommand(
       return { message: target.name + " chưa có gà chiến nên chưa thể nhận kèo." };
     const ownEquipment = chickenClawItem(repository.chickenWebProfile(message.senderId)?.equipped_item);
     const challengedEquipment = chickenClawItem(repository.chickenWebProfile(target.canonicalId)?.equipped_item);
+    const image = await renderChickenPkBanner({
+      left: { chicken: ownChicken, ownerName: message.senderName, equipment: ownEquipment },
+      right: { chicken: targetChicken, ownerName: target.name, equipment: challengedEquipment },
+      state: "challenge",
+      stake: command.stake,
+    });
     const now = Date.now();
     const created = repository.createChickenChallenge({
       id: randomUUID(),
@@ -161,6 +168,7 @@ export async function handleChickenCommand(
       expiresAt: now + CHALLENGE_TTL_MS,
     });
     return {
+      image,
       mention: { uid: target.rawUid, name: target.name },
       message: lines(
         "🥊 KÈO ĐÁ GÀ",
@@ -200,6 +208,23 @@ export async function handleChickenCommand(
     else targetScore += 1;
   }
   const winnerId = challengerScore > targetScore ? challenge.challenger_id : challenge.target_id;
+  const image = await renderChickenPkBanner({
+    left: {
+      chicken: challengerChicken,
+      ownerName: challenge.challenger_name,
+      equipment: challengerEquipment,
+      score: challengerScore,
+    },
+    right: {
+      chicken: targetChicken,
+      ownerName: challenge.target_name,
+      equipment: targetEquipment,
+      score: targetScore,
+    },
+    state: "result",
+    winnerId,
+    stake: BigInt(challenge.stake),
+  });
   const settled = repository.settleChickenChallenge({
     id: challenge.id,
     targetId: message.senderId,
@@ -228,6 +253,7 @@ export async function handleChickenCommand(
     targetScore,
   });
   return {
+    image,
     message: lines(
       "🏆 KẾT QUẢ ĐÁ GÀ",
       "",
@@ -257,7 +283,7 @@ function ensureChickenProfile(zaloId: string) {
 }
 
 function cleanName(value: string) {
-  return value.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 30) || "Chiến Kê";
+  return value.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 30) || "Chiến Kê";
 }
 
 function targetMentions(message: IncomingGroupMessage, botIds: ReadonlySet<string>) {

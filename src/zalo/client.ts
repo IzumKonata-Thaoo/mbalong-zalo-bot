@@ -264,12 +264,18 @@ class ZaloClient extends EventEmitter {
     image: Buffer,
     caption: string,
     quote?: unknown,
+    mention?: { uid: string; name: string },
   ) {
     if (!this.api) throw new Error("Zalo chưa kết nối");
     const normalizedQuote = normalizeZaloQuote(quote);
+    const mentionToken = mention ? `@${mention.name}` : "";
+    const mentionPos = mentionToken ? caption.indexOf(mentionToken) : -1;
     return this.api.sendMessage(
       {
         msg: caption,
+        ...(mention && mentionPos >= 0
+          ? { mentions: [{ pos: mentionPos, len: mentionToken.length, uid: mention.uid }] }
+          : {}),
         attachments: {
           data: image,
           filename: `mbalong-image-${Date.now()}.png`,

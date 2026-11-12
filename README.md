@@ -183,6 +183,8 @@ Giá nâng từ level 1 là `1 tỷ`, sau đó nhân `1.000` mỗi level: `1 ngh
 
 `/ga` còn gửi một link garage riêng có token ngẫu nhiên, không chứa Zalo ID. Lần mở đầu tiên, chủ gà đặt PIN từ 4 đến 12 chữ số; PIN được băm bằng `scrypt`, không lưu dạng rõ. Garage có bảy loại móng: Sắt, Vonfram, Hoàng Kim, Thiên Thạch, Long Cốt, Kim Cương và Hư Không. Bấm một món chỉ xem trước ảnh; nút mua/trang bị nằm riêng. Mua đồ trừ chính bảng `wallets` mà Zalo đang dùng, còn trang bị lại đồ đã sở hữu không trừ thêm. Móng đang mang cộng lực chiến thật khi PK.
 
+Tên gà có thể đặt ngay khi `/nuoiga [tên]`, đổi bằng `/datten [tên mới]`, hoặc sửa trực tiếp trong garage web. Khi tạo kèo PK, bot gửi banner lửa có hai avatar gà và chữ `VS` ở giữa; sau khi đối thủ reply `/y`, kết quả được gửi bằng banner riêng đánh dấu `CHIẾN THẮNG` và `THẤT BẠI`, kèm điểm thật của hai bên.
+
 Để link `/ga` mở được từ Zalo mà không lộ IP VPS, cấu hình Cloudflare Tunnel theo [hướng dẫn garage](docs/chicken-garage.md). Bot mặc định bind vào `127.0.0.1`; đặt `PUBLIC_ORIGIN` thành hostname HTTPS ổn định của tunnel.
 
 Zalo UID có trong `ZALO_ADMIN_IDS` hoặc admin thật của group được cộng/trừ số dư. Không tag thêm ai thì lệnh áp dụng cho chính admin; muốn chỉnh thành viên khác, tag người đó hoặc nhập Zalo ID:

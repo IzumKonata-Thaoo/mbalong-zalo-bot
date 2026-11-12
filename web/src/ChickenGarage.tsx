@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, ChevronRight, Lock, LogOut, ShieldCheck } from "lucide-react";
+import { Check, ChevronRight, Lock, LogOut, Pencil, ShieldCheck } from "lucide-react";
 import { useParams } from "react-router-dom";
 
 type ClawItem = {
@@ -53,6 +53,7 @@ export function ChickenGarage() {
   const [chickenName, setChickenName] = useState("");
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
+  const [name, setName] = useState("");
   const [selected, setSelected] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -61,6 +62,7 @@ export function ChickenGarage() {
   const loadGarage = useCallback(async () => {
     const data = await chickenRequest<Garage>(token, "/garage");
     setGarage(data);
+    setName(data.chicken.name);
     setSelected((current) => current || (data.equippedItem !== "bare" ? data.equippedItem : data.items[0]?.id) || "");
     setMode("garage");
     return data;
@@ -121,6 +123,27 @@ export function ChickenGarage() {
     try {
       const data = await chickenRequest<Garage>(token, `/equipment/${selectedItem.id}`, { method: "POST" });
       setGarage(data);
+      setImageVersion((value) => value + 1);
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function renameChicken(event: React.FormEvent) {
+    event.preventDefault();
+    const normalized = name.replace(/\s+/g, " ").trim();
+    if (!normalized || normalized === garage?.chicken.name) return;
+    setBusy(true);
+    setError("");
+    try {
+      const data = await chickenRequest<Garage>(token, "/name", {
+        method: "POST",
+        body: JSON.stringify({ name: normalized }),
+      });
+      setGarage(data);
+      setName(data.chicken.name);
       setImageVersion((value) => value + 1);
     } catch (cause) {
       setError((cause as Error).message);
@@ -204,6 +227,14 @@ export function ChickenGarage() {
             </div>
             <small>Đang mang<br /><b>{garage.equippedName}</b></small>
           </div>
+          <form className="garage-rename" onSubmit={renameChicken}>
+            <label htmlFor="chicken-name">Tên chiến kê</label>
+            <div>
+              <Pencil size={15} aria-hidden="true" />
+              <input id="chicken-name" maxLength={30} value={name} onChange={(event) => setName(event.target.value.replace(/[\r\n\t]/g, " "))} />
+              <button disabled={busy || !name.trim() || name.trim() === garage.chicken.name}>Lưu tên</button>
+            </div>
+          </form>
           <div className="garage-list-head">
             <div><h1>Kho móng</h1><p>Chọn một món để xem trực tiếp trên gà.</p></div>
             <span>{garage.items.filter((item) => item.owned).length}/{garage.items.length}</span>

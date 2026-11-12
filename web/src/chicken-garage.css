@@ -67,6 +67,13 @@
 .garage-balance strong { font-size: 24px; font-weight: 600; }
 .garage-balance small { text-align: right; line-height: 1.5; }
 .garage-balance small b { color: #fff; font-weight: 500; }
+.garage-rename { padding: 18px 0; border-bottom: 1px solid var(--garage-raised); /* taste-skill-ignore: settings row boundary */ }
+.garage-rename > label { display: block; color: var(--garage-muted); font-size: 12px; margin-bottom: 8px; }
+.garage-rename > div { height: 40px; display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 9px; background: var(--garage-raised); border-radius: 999px; padding: 0 5px 0 13px; }
+.garage-rename svg { color: var(--garage-faint); }
+.garage-rename input { min-width: 0; border: 0; outline: 0; background: transparent; color: #fff; font: inherit; }
+.garage-rename button { height: 30px; border: 0; border-radius: 999px; padding: 0 13px; background: #fff; color: #000; font-size: 12px; font-weight: 600; cursor: pointer; }
+.garage-rename button:disabled { background: #3f3f46; color: var(--garage-faint); cursor: default; }
 .garage-list-head { display: flex; justify-content: space-between; gap: 20px; align-items: start; padding: 22px 0 12px; }
 .garage-list-head h1 { font-size: 20px; margin: 0 0 5px; font-weight: 600; }
 .garage-list-head p { margin: 0; color: var(--garage-muted); }

@@ -2,7 +2,7 @@ import sharp from "sharp";
 import { chickenPower, upgradeCost } from "./chicken-rules.js";
 import { formatBetAmount } from "./tai-xiu-rules.js";
 
-interface ChickenImageData {
+export interface ChickenImageData {
   zalo_id: string;
   name: string;
   level: number;

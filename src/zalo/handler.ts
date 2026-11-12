@@ -96,6 +96,7 @@ async function processMessage(message: IncomingGroupMessage, question: string) {
           chickenResponse.image,
           chickenResponse.message,
           message.raw,
+          chickenResponse.mention,
         );
       else if (chickenResponse.mention)
         await zaloClient.sendMention(
