@@ -113,6 +113,11 @@ export function createServer() {
   app.use(express.json({ limit: "64kb" }));
   app.use(cookieParser());
   app.use(sameOrigin);
+  app.get("/api/health", (_req, res) =>
+    res
+      .set("Cache-Control", "no-store")
+      .json({ ok: true, service: config.BOT_NAME }),
+  );
   app.post("/api/auth/login", (req, res) => {
     const ip = req.ip ?? "unknown",
       now = Date.now(),

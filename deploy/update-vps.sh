@@ -4,13 +4,14 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/IzumKonata-Thaoo/mbalong-zalo-bot/main/deploy/update-vps.sh | bash
 #
-# Tuỳ chọn: BOT_DIR=~/zl SCREEN_NAME=zl BRANCH=main
+# Tuỳ chọn: BOT_DIR=~/zl SCREEN_NAME=mbalong BRANCH=main TUNNEL_MODE=tailscale
 set -Eeuo pipefail
 
 REPO_URL="${REPO_URL:-https://github.com/IzumKonata-Thaoo/mbalong-zalo-bot.git}"
 BRANCH="${BRANCH:-main}"
 BOT_DIR="${BOT_DIR:-$HOME/zl}"
 SCREEN_NAME="${SCREEN_NAME:-zl}"
+TUNNEL_MODE="${TUNNEL_MODE:-none}"
 
 say() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 die() { printf '\n\033[1;31mLỗi: %s\033[0m\n' "$*" >&2; exit 1; }
@@ -52,6 +53,22 @@ if ! command -v yt-dlp >/dev/null 2>&1; then
   $SUDO chmod a+rx /usr/local/bin/yt-dlp
 else
   $SUDO yt-dlp -U >/dev/null 2>&1 || true
+fi
+
+if [[ "$TUNNEL_MODE" == "tailscale" ]] && ! command -v tailscale >/dev/null 2>&1; then
+  say "Cài Tailscale"
+  curl -fsSL https://tailscale.com/install.sh | $SUDO sh
+fi
+
+if [[ "$TUNNEL_MODE" == "quick" ]] && ! command -v cloudflared >/dev/null 2>&1; then
+  say "Cài Cloudflare Tunnel"
+  $SUDO install -d -m 0755 /usr/share/keyrings
+  curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg \
+    | $SUDO tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+  echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" \
+    | $SUDO tee /etc/apt/sources.list.d/cloudflared.list >/dev/null
+  $SUDO apt-get update -y
+  $SUDO apt-get install -y cloudflared
 fi
 
 mkdir -p "$BOT_DIR"
@@ -113,6 +130,15 @@ if screen -ls | grep -qE "[0-9]+\.${SCREEN_NAME}[[:space:]]"; then
   tail -n 20 logs/bot.log 2>/dev/null || true
 else
   die "screen '$SCREEN_NAME' không chạy. Kiểm tra: cd $BOT_DIR && npm start"
+fi
+if [[ "$TUNNEL_MODE" == "tailscale" ]]; then
+  BOT_DIR="$BOT_DIR" BOT_SCREEN_NAME="$SCREEN_NAME" \
+    bash "$BOT_DIR/deploy/start-tailscale-funnel.sh"
+elif [[ "$TUNNEL_MODE" == "quick" ]]; then
+  BOT_DIR="$BOT_DIR" BOT_SCREEN_NAME="$SCREEN_NAME" TUNNEL_SCREEN_NAME="${SCREEN_NAME}-tunnel" \
+    bash "$BOT_DIR/deploy/start-quick-tunnel.sh"
+elif [[ "$TUNNEL_MODE" != "none" ]]; then
+  die "TUNNEL_MODE chỉ nhận: none, tailscale hoặc quick"
 fi
 if [[ -f "$BACKUP" ]]; then
   echo "Khôi phục nếu cần: tar -xzf $BACKUP -C $BOT_DIR"

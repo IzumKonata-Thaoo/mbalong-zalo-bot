@@ -253,6 +253,38 @@ curl -fsSL https://raw.githubusercontent.com/IzumKonata-Thaoo/mbalong-zalo-bot/m
 
 Thư mục hoặc tên screen khác: `... | BOT_DIR=~/bot SCREEN_NAME=bot bash`.
 
+### Cài/cập nhật full và mở web cho mọi người bằng Tailscale Funnel
+
+Nếu VPS đã đăng nhập Tailscale, dùng nguyên khối này. Script tự giữ dữ liệu cũ, cài dependencies, build, chạy bot trong screen `mbalong`, bật Funnel, ghi URL HTTPS vào `PUBLIC_ORIGIN`, restart bot và kiểm tra URL công khai:
+
+```bash
+curl -fsSLo /tmp/mbalong-update.sh \
+  https://raw.githubusercontent.com/IzumKonata-Thaoo/mbalong-zalo-bot/main/deploy/update-vps.sh
+BOT_DIR="$HOME/zl" SCREEN_NAME=mbalong TUNNEL_MODE=tailscale \
+  bash /tmp/mbalong-update.sh
+```
+
+Nếu script báo VPS chưa đăng nhập Tailscale, chạy `sudo tailscale up` một lần rồi chạy lại khối trên. Nếu tailnet chưa cho phép Funnel, mở URL cấp quyền mà Tailscale in ra rồi chạy lại. Funnel public cho người không cài Tailscale và giữ URL `*.ts.net` sau reboot.
+
+Kiểm tra bất cứ lúc nào:
+
+```bash
+cd ~/zl
+BOT_DIR="$HOME/zl" bash deploy/diagnose-web.sh
+sudo tailscale funnel status
+```
+
+Phương án tạm thời không cần tài khoản/domain là Cloudflare Quick Tunnel. URL sẽ đổi mỗi lần tunnel dừng, vì vậy các link garage cũ sẽ hết hiệu lực:
+
+```bash
+curl -fsSLo /tmp/mbalong-update.sh \
+  https://raw.githubusercontent.com/IzumKonata-Thaoo/mbalong-zalo-bot/main/deploy/update-vps.sh
+BOT_DIR="$HOME/zl" SCREEN_NAME=mbalong TUNNEL_MODE=quick \
+  bash /tmp/mbalong-update.sh
+```
+
+Quick Tunnel chạy trong screen `mbalong-tunnel`; chạy lại `deploy/start-quick-tunnel.sh` sau reboot để lấy URL mới. Với domain riêng, Named Cloudflare Tunnel vẫn là lựa chọn ổn định nhất cho production; xem [hướng dẫn garage](docs/chicken-garage.md).
+
 Quyền `/nap` và `/tru` được kiểm tra trực tiếp với Zalo (trưởng nhóm, phó nhóm qua `getGroupInfo` và link nhóm) hoặc `ZALO_ADMIN_IDS`, không phụ thuộc danh sách thành viên đã đồng bộ đủ hay chưa. Log `[members]` và `[admin]` trong screen cho biết từng nguồn trả về bao nhiêu ID.
 
 ## Chạy nền bằng systemd

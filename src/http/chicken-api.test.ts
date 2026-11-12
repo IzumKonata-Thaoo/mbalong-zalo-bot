@@ -44,6 +44,13 @@ afterAll(async () => {
 });
 
 describe("chicken garage API", () => {
+  it("exposes a public health check for tunnel verification", async () => {
+    const response = await fetch(`${origin}/api/health`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    await expect(response.json()).resolves.toMatchObject({ ok: true, service: "MbaLong" });
+  });
+
   it("claims a PIN, requires the cookie, and atomically buys from the shared wallet", async () => {
     const status = await fetch(`${origin}/api/chicken/${token}/status`).then((response) => response.json());
     expect(status).toMatchObject({ valid: true, pinConfigured: false, chickenName: "API Kê" });

@@ -1,6 +1,17 @@
-# Garage gà chiến qua Cloudflare Tunnel
+# Garage gà chiến qua tunnel HTTPS
 
 Garage dùng chung SQLite với bot Zalo. Mỗi gà có một token quản lý ngẫu nhiên và một PIN số riêng. Token không chứa Zalo ID; cookie đăng nhập là `HttpOnly`, `SameSite=Strict` và tự bật `Secure` khi `PUBLIC_ORIGIN` dùng HTTPS.
+
+Nếu VPS đã dùng Tailscale, cách nhanh và ổn định nhất khi chưa có domain là:
+
+```bash
+curl -fsSLo /tmp/mbalong-update.sh \
+  https://raw.githubusercontent.com/IzumKonata-Thaoo/mbalong-zalo-bot/main/deploy/update-vps.sh
+BOT_DIR="$HOME/zl" SCREEN_NAME=mbalong TUNNEL_MODE=tailscale \
+  bash /tmp/mbalong-update.sh
+```
+
+Lệnh này tự bật Tailscale Funnel, lấy URL `https://....ts.net`, cập nhật `.env` và kiểm tra truy cập công khai. Người mở link không cần cài Tailscale. Phần Cloudflare bên dưới dành cho trường hợp có domain riêng.
 
 ## 1. Cấu hình bot chỉ nghe ở localhost
 
