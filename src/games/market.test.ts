@@ -24,6 +24,12 @@ afterAll(() => {
 });
 
 describe("market wallet settlement", () => {
+  it("keeps full winning leverage but caps only the losing side at 100x", () => {
+    expect(market.calculateFixedMarketPnl(1_000n, 1_000n, true)).toBe(1_000_000n);
+    expect(market.calculateFixedMarketPnl(1_000n, 1_000n, false)).toBe(-100_000n);
+    expect(market.calculateFixedMarketPnl(1_000n, 20n, false)).toBe(-20_000n);
+  });
+
   it("uses the close time selected in the command", () => {
     repository.adjustWalletBalance("timed-user", 10_000n);
     const now = Date.now();
@@ -113,7 +119,7 @@ describe("market wallet settlement", () => {
       .toMatchObject({ games_played: 1, games_won: 1 });
   });
 
-  it("subtracts stake times leverage on a losing result", async () => {
+  it("caps a losing 1000x result at stake times 100 while preserving the displayed leverage", async () => {
     repository.setSettings({
       "games.market_win_rate": "0",
       "games.jackpot_rate": "0",
@@ -133,9 +139,10 @@ describe("market wallet settlement", () => {
     if (!opened.ok) return;
 
     const settled = await market.settleMarketPosition(opened.position);
-    expect(settled.normalPnl).toBe(-1_000_000n);
-    expect(settled.pnl).toBe(-1_000_000n);
-    expect(repository.walletBalance("leveraged-loser")).toBe(500_000n);
+    expect(settled.normalPnl).toBe(-100_000n);
+    expect(settled.pnl).toBe(-100_000n);
+    expect(settled.leverage).toBe(1_000n);
+    expect(repository.walletBalance("leveraged-loser")).toBe(1_400_000n);
   });
 
   it("stops a leveraged loss at zero instead of creating a negative wallet", async () => {
@@ -158,7 +165,7 @@ describe("market wallet settlement", () => {
     if (!opened.ok) return;
 
     const settled = await market.settleMarketPosition(opened.position);
-    expect(settled.normalPnl).toBe(-1_000_000n);
+    expect(settled.normalPnl).toBe(-100_000n);
     expect(settled.pnl).toBe(-50_000n);
     expect(settled.balance).toBe(0n);
     expect(repository.walletBalance("capped-loser")).toBe(0n);
