@@ -28,6 +28,8 @@ import {
 } from "../games/continuous-market.js";
 import { handleWalletCommand } from "../games/wallet.js";
 import { parseWalletCommand } from "../games/wallet-rules.js";
+import { handleChickenCommand } from "../games/chicken.js";
+import { parseChickenCommand } from "../games/chicken-rules.js";
 import {
   isLeaderboardCommand,
   leaderboardMessage,
@@ -51,6 +53,7 @@ const queues: Record<MessageLane, KeyedSerialQueue> = {
 function messageLane(question: string, hasImage: boolean): MessageLane {
   if (hasImage) return "ai";
   if (isClearContextCommand(question)) return "ai";
+  if (parseChickenCommand(question)) return "game";
   if (parseWalletCommand(question)) return "game";
   if (isLeaderboardCommand(question)) return "game";
   if (parseContinuousMarketCommand(question)) return "game";
@@ -78,6 +81,36 @@ async function processMessage(message: IncomingGroupMessage, question: string) {
         `🧹 Đã xoá ngữ cảnh trò chuyện của ${config.BOT_NAME} trong nhóm (${cleared.messages} tin nhắn${cleared.summaries ? " và bản tóm tắt" : ""}). Bot bắt đầu cuộc trò chuyện mới.`,
         message.raw,
       );
+      return;
+    }
+    const chickenResponse = message.imageUrl
+      ? null
+      : await handleChickenCommand(message, question, {
+          botIds: zaloClient.botIds(message.groupId),
+          isReplyToBot: (msg) => zaloClient.isReplyToBot(msg),
+        });
+    if (chickenResponse) {
+      if (chickenResponse.image)
+        await zaloClient.sendImage(
+          message.groupId,
+          chickenResponse.image,
+          chickenResponse.message,
+          message.raw,
+        );
+      else if (chickenResponse.mention)
+        await zaloClient.sendMention(
+          message.groupId,
+          chickenResponse.message,
+          chickenResponse.mention.uid,
+          chickenResponse.mention.name,
+          message.raw,
+        );
+      else
+        await zaloClient.send(
+          message.groupId,
+          chickenResponse.message,
+          message.raw,
+        );
       return;
     }
     const walletResponse = message.imageUrl
@@ -335,9 +368,13 @@ async function processMessage(message: IncomingGroupMessage, question: string) {
 
 export function startMessageHandler() {
   zaloClient.on("group-message", (message: IncomingGroupMessage) => {
+    const chickenReply =
+      Boolean(message.quoted) &&
+      zaloClient.isReplyToBot(message) &&
+      /^\/(?:y|tuchoi)\s*$/i.test(message.content.trim());
     if (
       !repository.group(message.groupId)?.enabled ||
-      !zaloClient.isMentioned(message)
+      (!zaloClient.isMentioned(message) && !chickenReply)
     )
       return;
     const question =

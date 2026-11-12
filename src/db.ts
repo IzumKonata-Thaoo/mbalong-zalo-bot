@@ -76,6 +76,35 @@ CREATE TABLE IF NOT EXISTS game_stats (
   games_won INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS chickens (
+  zalo_id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  level INTEGER NOT NULL DEFAULT 1 CHECK(level >= 1),
+  aggression INTEGER NOT NULL,
+  claws INTEGER NOT NULL,
+  comb INTEGER NOT NULL,
+  kick_power INTEGER NOT NULL,
+  wins INTEGER NOT NULL DEFAULT 0,
+  losses INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS chicken_challenges (
+  id TEXT PRIMARY KEY,
+  group_id TEXT NOT NULL,
+  challenger_id TEXT NOT NULL,
+  challenger_name TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  target_name TEXT NOT NULL,
+  stake TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','declined','expired','resolved')),
+  winner_id TEXT,
+  challenger_score INTEGER,
+  target_score INTEGER,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  resolved_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_chicken_challenge_target ON chicken_challenges(group_id,target_id,status,expires_at);
 `);
 
 function recordGameResult(
@@ -315,6 +344,97 @@ export const repository = {
   walletBalance(zaloId:string) {
     const row=db.prepare("SELECT balance FROM wallets WHERE zalo_id=?").get(zaloId) as {balance:string}|undefined;
     return BigInt(row?.balance ?? "0");
+  },
+  chicken(zaloId:string) {
+    return db.prepare("SELECT * FROM chickens WHERE zalo_id=?").get(zaloId) as {
+      zalo_id:string;name:string;level:number;aggression:number;claws:number;
+      comb:number;kick_power:number;wins:number;losses:number;updated_at:string;
+    }|undefined;
+  },
+  createChicken(chicken:{zaloId:string;name:string;aggression:number;claws:number;comb:number;kickPower:number}) {
+    const result=db.prepare(`INSERT OR IGNORE INTO chickens(zalo_id,name,aggression,claws,comb,kick_power)
+      VALUES(?,?,?,?,?,?)`).run(chicken.zaloId,chicken.name,chicken.aggression,chicken.claws,chicken.comb,chicken.kickPower);
+    return {created:result.changes===1,chicken:repository.chicken(chicken.zaloId)!};
+  },
+  renameChicken(zaloId:string,name:string) {
+    const changed=db.prepare("UPDATE chickens SET name=?,updated_at=CURRENT_TIMESTAMP WHERE zalo_id=?").run(name,zaloId).changes;
+    return changed ? repository.chicken(zaloId) : undefined;
+  },
+  upgradeChicken(zaloId:string,cost:bigint,boost:{aggression:number;claws:number;comb:number;kickPower:number}) {
+    return db.transaction(() => {
+      const chicken=repository.chicken(zaloId);
+      if(!chicken)return {ok:false as const,reason:"no_chicken" as const};
+      const balance=repository.walletBalance(zaloId);
+      if(balance<cost)return {ok:false as const,reason:"insufficient" as const,balance};
+      const nextBalance=balance-cost;
+      db.prepare(`INSERT INTO wallets(zalo_id,balance,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)
+        ON CONFLICT(zalo_id) DO UPDATE SET balance=excluded.balance,updated_at=CURRENT_TIMESTAMP`).run(zaloId,nextBalance.toString());
+      db.prepare(`UPDATE chickens SET level=level+1,aggression=aggression+?,claws=claws+?,comb=comb+?,kick_power=kick_power+?,updated_at=CURRENT_TIMESTAMP WHERE zalo_id=?`)
+        .run(boost.aggression,boost.claws,boost.comb,boost.kickPower,zaloId);
+      return {ok:true as const,balance:nextBalance,chicken:repository.chicken(zaloId)!};
+    })();
+  },
+  createChickenChallenge(input:{id:string;groupId:string;challengerId:string;challengerName:string;targetId:string;targetName:string;stake:bigint;now:number;expiresAt:number}) {
+    return db.transaction(() => {
+      db.prepare("UPDATE chicken_challenges SET status='expired' WHERE status='pending' AND expires_at<=?").run(input.now);
+      const busy=db.prepare(`SELECT id FROM chicken_challenges WHERE group_id=? AND status='pending'
+        AND (challenger_id IN (?,?) OR target_id IN (?,?)) LIMIT 1`)
+        .get(input.groupId,input.challengerId,input.targetId,input.challengerId,input.targetId);
+      if(busy)return {ok:false as const,reason:"busy" as const};
+      const balance=repository.walletBalance(input.challengerId);
+      if(balance<input.stake)return {ok:false as const,reason:"insufficient" as const,balance};
+      db.prepare(`INSERT INTO chicken_challenges(id,group_id,challenger_id,challenger_name,target_id,target_name,stake,created_at,expires_at)
+        VALUES(?,?,?,?,?,?,?,?,?)`).run(input.id,input.groupId,input.challengerId,input.challengerName,input.targetId,input.targetName,input.stake.toString(),input.now,input.expiresAt);
+      return {ok:true as const};
+    })();
+  },
+  pendingChickenChallenge(groupId:string,targetId:string,now=Date.now()) {
+    db.prepare("UPDATE chicken_challenges SET status='expired' WHERE status='pending' AND expires_at<=?").run(now);
+    return db.prepare(`SELECT * FROM chicken_challenges WHERE group_id=? AND target_id=? AND status='pending' AND expires_at>?
+      ORDER BY created_at DESC LIMIT 1`).get(groupId,targetId,now) as {
+        id:string;group_id:string;challenger_id:string;challenger_name:string;target_id:string;
+        target_name:string;stake:string;status:string;created_at:number;expires_at:number;
+      }|undefined;
+  },
+  declineChickenChallenge(id:string,targetId:string,now=Date.now()) {
+    return db.prepare(`UPDATE chicken_challenges SET status='declined',resolved_at=?
+      WHERE id=? AND target_id=? AND status='pending' AND expires_at>?`).run(now,id,targetId,now).changes===1;
+  },
+  settleChickenChallenge(input:{id:string;targetId:string;winnerId:string;challengerScore:number;targetScore:number;now:number}) {
+    return db.transaction(() => {
+      const challenge=db.prepare("SELECT * FROM chicken_challenges WHERE id=?").get(input.id) as {
+        id:string;group_id:string;challenger_id:string;challenger_name:string;target_id:string;target_name:string;
+        stake:string;status:string;expires_at:number;
+      }|undefined;
+      if(!challenge||challenge.status!=="pending"||challenge.target_id!==input.targetId)
+        return {ok:false as const,reason:"unavailable" as const};
+      if(challenge.expires_at<=input.now){
+        db.prepare("UPDATE chicken_challenges SET status='expired',resolved_at=? WHERE id=?").run(input.now,input.id);
+        return {ok:false as const,reason:"expired" as const};
+      }
+      if(input.winnerId!==challenge.challenger_id&&input.winnerId!==challenge.target_id)
+        return {ok:false as const,reason:"invalid_winner" as const};
+      const stake=BigInt(challenge.stake);
+      const challengerBalance=repository.walletBalance(challenge.challenger_id);
+      const targetBalance=repository.walletBalance(challenge.target_id);
+      if(challengerBalance<stake)return {ok:false as const,reason:"challenger_insufficient" as const,balance:challengerBalance};
+      if(targetBalance<stake)return {ok:false as const,reason:"target_insufficient" as const,balance:targetBalance};
+      const winnerIsChallenger=input.winnerId===challenge.challenger_id;
+      const challengerAfter=challengerBalance-stake+(winnerIsChallenger?stake*2n:0n);
+      const targetAfter=targetBalance-stake+(winnerIsChallenger?0n:stake*2n);
+      const upsert=db.prepare(`INSERT INTO wallets(zalo_id,balance,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)
+        ON CONFLICT(zalo_id) DO UPDATE SET balance=excluded.balance,updated_at=CURRENT_TIMESTAMP`);
+      upsert.run(challenge.challenger_id,challengerAfter.toString());
+      upsert.run(challenge.target_id,targetAfter.toString());
+      db.prepare("UPDATE chickens SET wins=wins+1,updated_at=CURRENT_TIMESTAMP WHERE zalo_id=?").run(input.winnerId);
+      const loserId=winnerIsChallenger?challenge.target_id:challenge.challenger_id;
+      db.prepare("UPDATE chickens SET losses=losses+1,updated_at=CURRENT_TIMESTAMP WHERE zalo_id=?").run(loserId);
+      db.prepare(`UPDATE chicken_challenges SET status='resolved',winner_id=?,challenger_score=?,target_score=?,resolved_at=? WHERE id=?`)
+        .run(input.winnerId,input.challengerScore,input.targetScore,input.now,input.id);
+      recordGameResult(challenge.challenger_id,challenge.challenger_name,winnerIsChallenger?stake:-stake);
+      recordGameResult(challenge.target_id,challenge.target_name,winnerIsChallenger?-stake:stake);
+      return {ok:true as const,stake,challengerAfter,targetAfter,challenge};
+    })();
   },
   adjustWalletBalance(zaloId:string,delta:bigint): {ok:true;previous:bigint;balance:bigint}|{ok:false;balance:bigint} {
     return db.transaction(() => {

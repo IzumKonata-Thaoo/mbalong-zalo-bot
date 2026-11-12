@@ -25,20 +25,19 @@ export function resolveTaiXiu(
 }
 
 export function formatBetAmount(amount: bigint): string {
-  const units = [
-    { value: 1_000_000_000_000_000_000n, name: "tỷ tỷ" },
-    { value: 1_000_000_000_000_000n, name: "triệu tỷ" },
-    { value: 1_000_000_000_000n, name: "nghìn tỷ" },
-    { value: 1_000_000_000n, name: "tỷ" },
-    { value: 1_000_000n, name: "triệu" },
-  ];
-  const unit = units.find((candidate) => amount >= candidate.value);
-  if (!unit) return amount.toLocaleString("vi-VN");
-  const whole = amount / unit.value;
-  const hundredths = ((amount % unit.value) * 100n) / unit.value;
+  const negative = amount < 0n;
+  const absolute = negative ? -amount : amount;
+  const group = Math.floor((absolute.toString().length - 1) / 3);
+  if (group < 2) return amount.toLocaleString("vi-VN");
+  const unitValue = 1_000n ** BigInt(group);
+  const tyCount = Math.floor(group / 3);
+  const prefix = group % 3 === 1 ? "nghìn " : group % 3 === 2 ? "triệu " : "";
+  const unitName = `${prefix}${Array.from({ length: tyCount }, () => "tỷ").join(" ")}`.trim();
+  const whole = absolute / unitValue;
+  const hundredths = ((absolute % unitValue) * 100n) / unitValue;
   const decimal =
     hundredths === 0n
       ? ""
       : `,` + hundredths.toString().padStart(2, "0").replace(/0+$/, "");
-  return `${whole.toLocaleString("vi-VN")}${decimal} ${unit.name}`;
+  return `${negative ? "−" : ""}${whole.toLocaleString("vi-VN")}${decimal} ${unitName}`;
 }

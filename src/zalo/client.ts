@@ -232,6 +232,33 @@ class ZaloClient extends EventEmitter {
         ThreadType.Group,
       );
   }
+  async sendMention(
+    groupId: string,
+    text: string,
+    targetId: string,
+    targetName: string,
+    quote?: unknown,
+  ) {
+    if (!this.api) throw new Error("Zalo chưa kết nối");
+    const token = `@${targetName}`;
+    const pos = text.indexOf(token);
+    const normalizedQuote = normalizeZaloQuote(quote);
+    return this.api.sendMessage(
+      {
+        msg: text,
+        ...(pos >= 0
+          ? { mentions: [{ pos, len: token.length, uid: targetId }] }
+          : {}),
+        ...(normalizedQuote ? { quote: normalizedQuote } : {}),
+      },
+      groupId,
+      ThreadType.Group,
+    );
+  }
+  isReplyToBot(message: IncomingGroupMessage) {
+    const quote = normalizeZaloQuote(message.quoted);
+    return Boolean(quote && this.botIds(message.groupId).has(quote.uidFrom));
+  }
   async sendImage(
     groupId: string,
     image: Buffer,
@@ -245,7 +272,7 @@ class ZaloClient extends EventEmitter {
         msg: caption,
         attachments: {
           data: image,
-          filename: `mbalong-market-${Date.now()}.png`,
+          filename: `mbalong-image-${Date.now()}.png`,
           metadata: {
             totalSize: image.length,
             width: 1280,

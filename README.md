@@ -135,7 +135,7 @@ Biểu đồ và giá chốt vẫn được dựng theo đúng hướng thắng 
 
 Tham số cuối là khung thời gian mô phỏng, nhận giây (`30s`) hoặc phút (`2m`), trong khoảng 5 giây đến 5 phút. Dù chọn `5m`, kết quả vẫn được trả sau 5–7 giây thực tế. Không nhập thì cả khung mô phỏng lẫn thời gian trả kết quả dùng 5–7 giây ngẫu nhiên. Nếu wallet của người chơi về 0 trong lúc bot đang xử lý lệnh, bot tự đóng vị thế ngay và thông báo trong nhóm; vị thế đó không tính thắng/thua hay nổ hũ.
 
-`/bxh` (hoặc `/top`) xếp hạng tổng tiền thắng từ tài xỉu và Long/Short. Tiền admin nạp/trừ không được tính. Dữ liệu bắt đầu tích lũy từ khi cài bản có bảng xếp hạng. Admin chỉnh tỉ lệ thắng riêng cho hai trò tại **Cấu hình → Tỉ lệ thắng trò chơi**; thay đổi có hiệu lực ngay với các ván mới.
+`/bxh` (hoặc `/top`) xếp hạng tổng tiền thắng từ tài xỉu, Long/Short và đá gà. Tiền admin nạp/trừ không được tính. Dữ liệu bắt đầu tích lũy từ khi cài bản có bảng xếp hạng. Admin chỉnh tỉ lệ thắng riêng cho tài xỉu và Long/Short tại **Cấu hình → Tỉ lệ thắng trò chơi**; thay đổi có hiệu lực ngay với các ván mới.
 
 Cả hai trò dùng chung tính năng nổ hũ. Admin cấu hình số tiền hũ và tỉ lệ nổ trong cùng trang. Hũ chỉ được quay sau khi người chơi đã thắng: nếu nổ, bot trả số tiền hũ đã đặt; nếu số tiền hũ thấp hơn tiền thắng bình thường, tiền thưởng được nâng thành gấp đôi tiền thắng bình thường. Mặc định là `1%` và `1 triệu`; đặt tỉ lệ `0%` để tắt.
 
@@ -157,6 +157,22 @@ Admin còn có thể cấu hình **Hũ cháy ví** với tỉ lệ riêng. Hũ n
 SL/TP là hệ số của số dư lúc mở. `sl 0.5x` nghĩa là đóng khi số dư còn 50%; `tp 2x` nghĩa là đóng khi số dư đạt gấp đôi. Có thể bỏ SL hoặc TP. Khi cháy ví, bot gửi thông báo và đóng vị thế ngay.
 
 Khi chưa chạm SL/TP, bot gửi cảnh báo một lần tại các mốc giảm còn 75%, 50%, 25% hoặc tăng lên 1,25x, 1,5x, 2x, 3x, 5x, 10x, 20x, 50x và 100x. Người chơi có thể dùng `/chot` ngay sau cảnh báo. Timer và cập nhật wallet dừng hẳn khi vị thế đã đóng.
+
+### Nuôi và PK gà chiến
+
+Mỗi Zalo ID sở hữu tối đa một chiến kê. Gà có level, độ sung, móng, mào, lực đá và thành tích thắng/thua. `/ga` dựng ảnh PNG riêng theo gà và hiển thị toàn bộ chỉ số. Lực chiến được tính chủ yếu từ lực đá, móng, độ sung, mào và level; khi PK mỗi bên nhận thêm dao động may mắn ±15%.
+
+```text
+@MbaLong /nuoiga Hắc Kê
+@MbaLong /ga
+@MbaLong /datten Lôi Kê
+@MbaLong /nangga
+@MbaLong /pk @ĐốiThủ 1 tỷ
+```
+
+Người bị gạ reply trực tiếp tin nhắn kèo bằng `/y` để nhận hoặc `/tuchoi` để từ chối; không cần tag lại bot trong reply. Kèo tồn tại 5 phút. Khi nhận kèo, bot kiểm tra lại số dư của cả hai, trừ cùng mức cược và trả toàn bộ pot cho người thắng trong một transaction SQLite. Thiếu tiền ở bất kỳ bên nào thì không ví nào bị thay đổi.
+
+Giá nâng từ level 1 là `1 tỷ`, sau đó nhân `1.000` mỗi level: `1 nghìn tỷ`, `1 triệu tỷ`, `1 tỷ tỷ`… đến `tỷ tỷ tỷ` và lớn hơn bằng `BigInt`. Tiền PK hiểu số thường và cách viết tiếng Việt như `2 triệu`, `1,5 tỷ`, `1 tỷ tỷ`, `1 tỷ tỷ tỷ`.
 
 Zalo UID có trong `ZALO_ADMIN_IDS` hoặc admin thật của group được cộng/trừ số dư. Không tag thêm ai thì lệnh áp dụng cho chính admin; muốn chỉnh thành viên khác, tag người đó hoặc nhập Zalo ID:
 
