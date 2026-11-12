@@ -24,10 +24,13 @@ afterAll(() => {
 });
 
 describe("market wallet settlement", () => {
-  it("keeps full winning leverage but caps only the losing side at 100x", () => {
+  it("keeps full winning leverage but charges one tenth on the losing side", () => {
     expect(market.calculateFixedMarketPnl(1_000n, 1_000n, true)).toBe(1_000_000n);
     expect(market.calculateFixedMarketPnl(1_000n, 1_000n, false)).toBe(-100_000n);
-    expect(market.calculateFixedMarketPnl(1_000n, 20n, false)).toBe(-20_000n);
+    expect(market.calculateFixedMarketPnl(1_000n, 100n, false)).toBe(-10_000n);
+    expect(market.calculateFixedMarketPnl(1_000n, 10n, false)).toBe(-1_000n);
+    expect(market.calculateFixedMarketPnl(1_000n, 20n, false)).toBe(-2_000n);
+    expect(market.calculateFixedMarketPnl(1n, 1n, false)).toBe(-1n);
   });
 
   it("uses the close time selected in the command", () => {
@@ -119,7 +122,7 @@ describe("market wallet settlement", () => {
       .toMatchObject({ games_played: 1, games_won: 1 });
   });
 
-  it("caps a losing 1000x result at stake times 100 while preserving the displayed leverage", async () => {
+  it("charges one tenth of a losing 1000x position while preserving the displayed leverage", async () => {
     repository.setSettings({
       "games.market_win_rate": "0",
       "games.jackpot_rate": "0",
