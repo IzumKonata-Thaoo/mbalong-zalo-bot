@@ -12,6 +12,7 @@ import {
   passwordMatches,
   requireAdmin,
   sameOrigin,
+  secureCookieForRequest,
   type AuthRequest,
 } from "./auth.js";
 import {
@@ -139,7 +140,7 @@ export function createServer() {
       .cookie("admin_session", issueToken(), {
         httpOnly: true,
         sameSite: "strict",
-        secure: config.PUBLIC_ORIGIN.startsWith("https"),
+        secure: secureCookieForRequest(req),
         maxAge: 12 * 3600_000,
         path: "/",
       })

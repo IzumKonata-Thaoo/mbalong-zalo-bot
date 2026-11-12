@@ -56,6 +56,9 @@ curl -fsS --max-time 8 "$LOCAL_ORIGIN/api/health" >/dev/null \
   || die "bot chưa trả lời ở $LOCAL_ORIGIN; xem $BOT_DIR/logs/bot.log"
 $SUDO tailscale status >/dev/null 2>&1 \
   || die "VPS chưa đăng nhập Tailscale; chạy 'sudo tailscale up' một lần rồi chạy lại"
+TAILSCALE_IP="$($SUDO tailscale ip -4 | head -n 1 | tr -d '\r')"
+[[ "$TAILSCALE_IP" =~ ^100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.[0-9]{1,3}\.[0-9]{1,3}$ ]] \
+  || die "không đọc được IPv4 Tailscale hợp lệ"
 
 say "Bật Tailscale Funnel công khai"
 FUNNEL_OUTPUT="$($SUDO tailscale funnel --bg --yes "$LOCAL_ORIGIN" 2>&1)" || {
@@ -73,6 +76,10 @@ PUBLIC_URL="$(printf '%s\n%s\n' "$FUNNEL_OUTPUT" "$FUNNEL_STATUS" \
 say "Cập nhật PUBLIC_ORIGIN và khởi động lại bot"
 set_env_value HOST "127.0.0.1"
 set_env_value PUBLIC_ORIGIN "$PUBLIC_URL"
+set_env_value TAILSCALE_LISTEN_IP "$TAILSCALE_IP"
+if command -v ufw >/dev/null 2>&1 && $SUDO ufw status 2>/dev/null | grep -q '^Status: active'; then
+  $SUDO ufw allow in on tailscale0 to any port "$PORT" proto tcp comment 'MbaLong Tailscale panel' >/dev/null
+fi
 stop_bot
 start_bot
 
@@ -93,6 +100,7 @@ curl -fsS --max-time 12 "$PUBLIC_URL/api/health" >/dev/null \
 cat <<EOF
 
 ✓ Web công khai: $PUBLIC_URL
+✓ Panel nội bộ:  http://$TAILSCALE_IP:$PORT
 ✓ Bot screen:    $BOT_SCREEN_NAME
 ✓ Funnel tự chạy lại cùng dịch vụ Tailscale sau khi reboot.
 

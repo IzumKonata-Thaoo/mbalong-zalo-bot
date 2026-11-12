@@ -8,16 +8,20 @@ const dir = mkdtempSync(join(tmpdir(), "mbalong-chicken-api-"));
 process.env.ADMIN_PASSWORD = "test-password-123456";
 process.env.JWT_SECRET = "z".repeat(40);
 process.env.DATABASE_PATH = join(dir, "bot.db");
-process.env.PUBLIC_ORIGIN = "http://localhost:8787";
+process.env.HOST = "127.0.0.1";
+process.env.PUBLIC_ORIGIN = "https://mbalong.example-tailnet.ts.net";
+process.env.TAILSCALE_LISTEN_IP = "100.100.100.100";
 
 let repository: typeof import("../db.js").repository;
 let db: typeof import("../db.js").db;
 let server: Server;
 let origin: string;
+let config: typeof import("../config.js").config;
 
 const token = "api-token-123456789012345678901234";
 
 beforeAll(async () => {
+  ({ config } = await import("../config.js"));
   ({ repository, db } = await import("../db.js"));
   const { createServer } = await import("./server.js");
   repository.createChicken({
@@ -44,6 +48,32 @@ afterAll(async () => {
 });
 
 describe("chicken garage API", () => {
+  it("allows admin login from the private Tailscale origin without forcing a Secure cookie", async () => {
+    expect(config.listenerHosts).toEqual(["127.0.0.1", "100.100.100.100"]);
+    expect(config.allowedOrigins.has("http://100.100.100.100:8787")).toBe(true);
+    const response = await fetch(`${origin}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "http://100.100.100.100:8787",
+      },
+      body: JSON.stringify({ password: "test-password-123456" }),
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("set-cookie")).not.toContain("Secure");
+
+    const publicResponse = await fetch(`${origin}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://mbalong.example-tailnet.ts.net",
+      },
+      body: JSON.stringify({ password: "test-password-123456" }),
+    });
+    expect(publicResponse.status).toBe(200);
+    expect(publicResponse.headers.get("set-cookie")).toContain("Secure");
+  });
+
   it("exposes a public health check for tunnel verification", async () => {
     const response = await fetch(`${origin}/api/health`);
     expect(response.status).toBe(200);

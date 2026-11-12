@@ -266,6 +266,13 @@ BOT_DIR="$HOME/zl" SCREEN_NAME=mbalong TUNNEL_MODE=tailscale \
 
 Nếu script báo VPS chưa đăng nhập Tailscale, chạy `sudo tailscale up` một lần rồi chạy lại khối trên. Nếu tailnet chưa cho phép Funnel, mở URL cấp quyền mà Tailscale in ra rồi chạy lại. Funnel public cho người không cài Tailscale và giữ URL `*.ts.net` sau reboot.
 
+Sau khi cài, bot mở đồng thời hai đường không xung đột nhau:
+
+- `https://<tên-máy>.<tailnet>.ts.net`: Funnel công khai, ai có link cũng mở được mà không cần cài Tailscale.
+- `http://<IP-Tailscale>:8787`: panel riêng trong tailnet, chỉ thiết bị đã kết nối Tailscale mới mở được.
+
+Ứng dụng vẫn bind Funnel ở `127.0.0.1` và chỉ bind listener thứ hai vào đúng IP `100.64.0.0/10`; nó không bind `0.0.0.0`, nên cổng admin không bị mở trên IP công khai của VPS.
+
 Kiểm tra bất cứ lúc nào:
 
 ```bash

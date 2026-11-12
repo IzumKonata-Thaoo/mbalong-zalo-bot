@@ -17,6 +17,7 @@ PORT="${PORT:-8787}"
 HOST="$(env_value HOST)"
 HOST="${HOST:-127.0.0.1}"
 PUBLIC_ORIGIN="$(env_value PUBLIC_ORIGIN)"
+TAILSCALE_LISTEN_IP="$(env_value TAILSCALE_LISTEN_IP)"
 LOCAL_ORIGIN="http://127.0.0.1:$PORT"
 
 printf 'HOST=%s\nPUBLIC_ORIGIN=%s\n' "$HOST" "${PUBLIC_ORIGIN:-chưa cấu hình}"
@@ -34,3 +35,9 @@ esac
 curl -fsS --max-time 20 "${PUBLIC_ORIGIN%/}/api/health" >/dev/null \
   || die "URL công khai chưa vào được: $PUBLIC_ORIGIN"
 printf '✓ Web công khai hoạt động: %s\n' "$PUBLIC_ORIGIN"
+if [[ -n "$TAILSCALE_LISTEN_IP" ]]; then
+  TAILSCALE_ORIGIN="http://$TAILSCALE_LISTEN_IP:$PORT"
+  curl -fsS --max-time 8 "$TAILSCALE_ORIGIN/api/health" >/dev/null \
+    || die "listener Tailscale chưa hoạt động: $TAILSCALE_ORIGIN"
+  printf '✓ Panel Tailscale hoạt động: %s\n' "$TAILSCALE_ORIGIN"
+fi

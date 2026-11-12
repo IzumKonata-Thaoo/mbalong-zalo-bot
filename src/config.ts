@@ -1,9 +1,29 @@
 import "dotenv/config";
 import { z } from "zod";
 
+function isTailscaleIpv4(value: string) {
+  const parts = value.split(".").map(Number);
+  return (
+    parts.length === 4 &&
+    parts.every((part) => Number.isInteger(part) && part >= 0 && part <= 255) &&
+    parts[0] === 100 &&
+    parts[1]! >= 64 &&
+    parts[1]! <= 127
+  );
+}
+
+const optionalTailscaleIp = z.preprocess(
+  (value) => (value === "" || value === undefined ? undefined : value),
+  z
+    .string()
+    .refine(isTailscaleIpv4, "TAILSCALE_LISTEN_IP phải thuộc dải 100.64.0.0/10")
+    .optional(),
+);
+
 const schema = z.object({
   PORT: z.coerce.number().int().positive().default(8787),
   HOST: z.string().default("127.0.0.1"),
+  TAILSCALE_LISTEN_IP: optionalTailscaleIp,
   ADMIN_PASSWORD: z
     .string()
     .min(12)
@@ -33,6 +53,13 @@ const schema = z.object({
 });
 
 const raw = schema.parse(process.env);
+const tailscaleOrigin = raw.TAILSCALE_LISTEN_IP
+  ? `http://${raw.TAILSCALE_LISTEN_IP}:${raw.PORT}`
+  : undefined;
+const listenerHosts =
+  raw.HOST === "0.0.0.0" || raw.HOST === "::"
+    ? [raw.HOST]
+    : [...new Set([raw.HOST, raw.TAILSCALE_LISTEN_IP].filter(Boolean) as string[])];
 export const config = {
   ...raw,
   BOT_NAME: raw.BOT_NAME.toLowerCase() === "nova" ? "MbaLong" : raw.BOT_NAME,
@@ -41,5 +68,15 @@ export const config = {
       .map((id) => id.trim())
       .filter(Boolean),
   ),
-  allowedOrigins: new Set([raw.PUBLIC_ORIGIN, "http://localhost:5173"]),
+  tailscaleOrigin,
+  listenerHosts,
+  allowedOrigins: new Set(
+    [
+      raw.PUBLIC_ORIGIN,
+      `http://localhost:${raw.PORT}`,
+      `http://127.0.0.1:${raw.PORT}`,
+      "http://localhost:5173",
+      tailscaleOrigin,
+    ].filter(Boolean) as string[],
+  ),
 };

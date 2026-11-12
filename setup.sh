@@ -33,6 +33,7 @@ if [[ ! -f .env ]]; then
   cat > .env <<EOF
 PORT=8787
 HOST=127.0.0.1
+TAILSCALE_LISTEN_IP=
 ADMIN_PASSWORD=${admin_password}
 JWT_SECRET=${jwt_secret}
 ZALO_ADMIN_IDS=

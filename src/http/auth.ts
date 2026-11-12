@@ -8,6 +8,11 @@ export function passwordMatches(value:string) {
   const a=Buffer.from(value),b=Buffer.from(config.ADMIN_PASSWORD);return a.length===b.length&&timingSafeEqual(a,b);
 }
 export function issueToken() { return jwt.sign({sub:"web-admin",role:"admin"},config.JWT_SECRET,{expiresIn:"12h",issuer:"zalo-ai-console"}); }
+export function secureCookieForRequest(req:Request) {
+  const origin=req.get("origin");
+  if(origin){try{return new URL(origin).protocol==="https:";}catch{return false;}}
+  return config.PUBLIC_ORIGIN.startsWith("https://");
+}
 export function requireAdmin(req:AuthRequest,res:Response,next:NextFunction) {
   const token=req.cookies?.admin_session;
   if(!token)return res.status(401).json({error:"Chưa đăng nhập"});
