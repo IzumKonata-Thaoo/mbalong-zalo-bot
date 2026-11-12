@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Routes, Route, NavLink, Navigate, useParams } from "react-router-dom";
+import { Routes, Route, NavLink, Navigate, useLocation, useParams } from "react-router-dom";
 import {
   Activity,
   ArrowRight,
@@ -28,6 +28,7 @@ import {
   Bomb,
 } from "lucide-react";
 import { api } from "./api";
+import { ChickenGarage } from "./ChickenGarage";
 
 type Zalo = {
   status: string;
@@ -62,6 +63,13 @@ type Audit = {
 };
 
 export function App() {
+  const location = useLocation();
+  if (location.pathname.startsWith("/ga/"))
+    return <Routes><Route path="/ga/:token" element={<ChickenGarage />} /></Routes>;
+  return <AdminApp />;
+}
+
+function AdminApp() {
   const [auth, setAuth] = useState<boolean | null>(null);
   useEffect(() => {
     api("/auth/me")

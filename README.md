@@ -20,8 +20,15 @@ Bot Zalo cá nhân bằng Node.js/TypeScript, chỉ trả lời trong group đư
 Yêu cầu Ubuntu 22.04/24.04 và Node.js 22 trở lên. Nếu chưa có Node.js:
 
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt-get install -y nodejs build-essential
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl gnupg build-essential
+curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+  | gpg --dearmor \
+  | sudo tee /usr/share/keyrings/nodesource.gpg >/dev/null
+echo 'deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main' \
+  | sudo tee /etc/apt/sources.list.d/nodesource.list >/dev/null
+sudo apt-get update
+sudo apt-get install -y nodejs
 ```
 
 Trong thư mục dự án:
@@ -173,6 +180,10 @@ Mỗi Zalo ID sở hữu tối đa một chiến kê. Gà có level, độ sung,
 Người bị gạ reply trực tiếp tin nhắn kèo bằng `/y` để nhận hoặc `/tuchoi` để từ chối; không cần tag lại bot trong reply. Kèo tồn tại 5 phút. Khi nhận kèo, bot kiểm tra lại số dư của cả hai, trừ cùng mức cược và trả toàn bộ pot cho người thắng trong một transaction SQLite. Thiếu tiền ở bất kỳ bên nào thì không ví nào bị thay đổi.
 
 Giá nâng từ level 1 là `1 tỷ`, sau đó nhân `1.000` mỗi level: `1 nghìn tỷ`, `1 triệu tỷ`, `1 tỷ tỷ`… đến `tỷ tỷ tỷ` và lớn hơn bằng `BigInt`. Tiền PK hiểu số thường và cách viết tiếng Việt như `2 triệu`, `1,5 tỷ`, `1 tỷ tỷ`, `1 tỷ tỷ tỷ`.
+
+`/ga` còn gửi một link garage riêng có token ngẫu nhiên, không chứa Zalo ID. Lần mở đầu tiên, chủ gà đặt PIN từ 4 đến 12 chữ số; PIN được băm bằng `scrypt`, không lưu dạng rõ. Garage có bảy loại móng: Sắt, Vonfram, Hoàng Kim, Thiên Thạch, Long Cốt, Kim Cương và Hư Không. Bấm một món chỉ xem trước ảnh; nút mua/trang bị nằm riêng. Mua đồ trừ chính bảng `wallets` mà Zalo đang dùng, còn trang bị lại đồ đã sở hữu không trừ thêm. Móng đang mang cộng lực chiến thật khi PK.
+
+Để link `/ga` mở được từ Zalo mà không lộ IP VPS, cấu hình Cloudflare Tunnel theo [hướng dẫn garage](docs/chicken-garage.md). Bot mặc định bind vào `127.0.0.1`; đặt `PUBLIC_ORIGIN` thành hostname HTTPS ổn định của tunnel.
 
 Zalo UID có trong `ZALO_ADMIN_IDS` hoặc admin thật của group được cộng/trừ số dư. Không tag thêm ai thì lệnh áp dụng cho chính admin; muốn chỉnh thành viên khác, tag người đó hoặc nhập Zalo ID:
 

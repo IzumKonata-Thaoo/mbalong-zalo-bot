@@ -57,19 +57,20 @@ export function chickenPower(chicken: {
   claws: number;
   comb: number;
   kick_power: number;
-}) {
+}, equipmentPowerBonus = 0) {
   return (
     chicken.kick_power * 5 +
     chicken.claws * 3 +
     chicken.aggression * 2 +
     chicken.comb +
-    chicken.level * 20
+    chicken.level * 20 + equipmentPowerBonus
   );
 }
 
 export function battleScore(
   chicken: Parameters<typeof chickenPower>[0],
   luckPercent: number,
+  equipmentPowerBonus = 0,
 ) {
-  return Math.max(1, Math.round(chickenPower(chicken) * luckPercent / 100));
+  return Math.max(1, Math.round(chickenPower(chicken, equipmentPowerBonus) * luckPercent / 100));
 }

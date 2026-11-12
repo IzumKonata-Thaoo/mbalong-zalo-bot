@@ -14,6 +14,14 @@ interface ChickenImageData {
   losses: number;
 }
 
+export interface ChickenEquipmentVisual {
+  id: string;
+  name: string;
+  powerBonus: number;
+  color: string;
+  accent: string;
+}
+
 const escapeXml = (value: string) =>
   value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[char]!);
 
@@ -26,6 +34,7 @@ function colorIndex(value: string) {
 export async function renderChickenImage(
   chicken: ChickenImageData,
   ownerName: string,
+  equipment?: ChickenEquipmentVisual,
 ) {
   const palettes = [
     ["#f59e0b", "#b45309", "#fde68a"],
@@ -35,7 +44,10 @@ export async function renderChickenImage(
     ["#34d399", "#047857", "#a7f3d0"],
   ];
   const [primary, dark, light] = palettes[colorIndex(chicken.zalo_id) % palettes.length]!;
-  const power = chickenPower(chicken);
+  const power = chickenPower(chicken, equipment?.powerBonus ?? 0);
+  const clawColor = equipment?.color ?? "#f59e0b";
+  const clawAccent = equipment?.accent ?? "#fde68a";
+  const equipmentLabel = equipment?.name ?? "Móng nguyên bản";
   const scaleMax = Math.max(100, chicken.aggression, chicken.claws, chicken.comb, chicken.kick_power);
   const stats = [
     ["ĐỘ SUNG", chicken.aggression, "#fb7185"],
@@ -74,12 +86,12 @@ export async function renderChickenImage(
       <path d="M592 267 L670 300 L590 320 Z" fill="#fbbf24" stroke="#fef3c7" stroke-width="6"/>
       <circle cx="554" cy="250" r="13" fill="#020617"/><circle cx="558" cy="245" r="4" fill="#fff"/>
       <path d="M530 330 C575 349 585 387 540 403 C510 378 500 349 530 330" fill="#dc2626"/>
-      <path d="M335 511 L315 620 M465 512 L493 620" stroke="#f59e0b" stroke-width="18" stroke-linecap="round"/>
-      <path d="M315 620 L266 644 M315 620 L322 657 M315 620 L361 645 M493 620 L445 650 M493 620 L505 658 M493 620 L541 642" stroke="#fde68a" stroke-width="12" stroke-linecap="round"/>
+      <path d="M335 511 L315 620 M465 512 L493 620" stroke="${clawColor}" stroke-width="18" stroke-linecap="round"/>
+      <path d="M315 620 L251 649 M315 620 L320 672 M315 620 L376 651 M493 620 L430 655 M493 620 L502 674 M493 620 L556 647" stroke="${clawAccent}" stroke-width="14" stroke-linecap="round"/>
     </g>
     <rect x="690" y="110" width="520" height="530" rx="24" fill="#0f172a" stroke="#334155" stroke-width="2"/>
     <text x="730" y="167" fill="#f8fafc" font-family="Arial" font-size="36" font-weight="900">${escapeXml(chicken.name)}</text>
-    <text x="730" y="201" fill="#64748b" font-family="Arial" font-size="17">Chủ kê: ${escapeXml(ownerName)}</text>
+    <text x="730" y="201" fill="#64748b" font-family="Arial" font-size="17">Chủ kê: ${escapeXml(ownerName)} · ${escapeXml(equipmentLabel)}</text>
     ${bars}
     <line x1="730" y1="587" x2="1145" y2="587" stroke="#334155"/>
     <text x="730" y="622" fill="#94a3b8" font-family="Arial" font-size="18">LỰC CHIẾN</text>

@@ -32,6 +32,7 @@ if [[ ! -f .env ]]; then
   umask 077
   cat > .env <<EOF
 PORT=8787
+HOST=127.0.0.1
 ADMIN_PASSWORD=${admin_password}
 JWT_SECRET=${jwt_secret}
 ZALO_ADMIN_IDS=
@@ -60,5 +61,6 @@ echo
 echo "Cài đặt hoàn tất."
 echo "1. Chạy lần đầu trong terminal: npm start"
 echo "2. Quét QR Zalo."
-echo "3. Mở web: ${MBALONG_PUBLIC_ORIGIN:-${NOVA_PUBLIC_ORIGIN:-http://localhost:8787}}"
+configured_public_origin="$(grep -E '^PUBLIC_ORIGIN=' .env | tail -n 1 | cut -d= -f2-)"
+echo "3. Mở web: ${configured_public_origin:-http://localhost:8787}"
 echo "4. Vào Cấu hình để nhập Base URL, Model và API key."

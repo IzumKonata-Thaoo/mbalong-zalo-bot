@@ -28,4 +28,10 @@ describe("chicken game rules", () => {
     expect(battleScore(chicken, 85)).toBe(327);
     expect(battleScore(chicken, 115)).toBe(443);
   });
+
+  it("adds equipped claw power to both displayed and battle power", () => {
+    const chicken = { level: 2, aggression: 10, claws: 10, comb: 10, kick_power: 10 };
+    expect(chickenPower(chicken, 500)).toBe(chickenPower(chicken) + 500);
+    expect(battleScore(chicken, 100, 500)).toBe(chickenPower(chicken) + 500);
+  });
 });

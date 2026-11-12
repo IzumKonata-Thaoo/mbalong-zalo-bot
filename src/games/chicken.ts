@@ -1,4 +1,5 @@
-import { randomInt, randomUUID } from "node:crypto";
+import { randomBytes, randomInt, randomUUID } from "node:crypto";
+import { config } from "../config.js";
 import { repository } from "../db.js";
 import type { IncomingGroupMessage } from "../types.js";
 import { renderChickenImage } from "./chicken-image.js";
@@ -10,6 +11,7 @@ import {
   upgradeCost,
 } from "./chicken-rules.js";
 import { formatBetAmount } from "./tai-xiu-rules.js";
+import { chickenClawItem } from "./chicken-equipment.js";
 
 const CHALLENGE_TTL_MS = 5 * 60_000;
 const lines = (...items: string[]) => items.join("\n");
@@ -48,6 +50,7 @@ export async function handleChickenCommand(
     });
     if (!created.created)
       return { message: "Bạn đã có gà " + created.chicken.name + ". Dùng /ga để xem hoặc /nangga để nâng cấp." };
+    ensureChickenProfile(message.senderId);
     return {
       message: lines(
         "🐣 NHẬN GÀ THÀNH CÔNG",
@@ -66,13 +69,19 @@ export async function handleChickenCommand(
     return { message: "Bạn chưa có gà chiến. Dùng @MbaLong /nuoiga [tên] để nhận gà đầu tiên." };
 
   if (command.kind === "view") {
-    const image = await renderChickenImage(ownChicken, message.senderName);
+    const profile = ensureChickenProfile(message.senderId);
+    const equipment = chickenClawItem(profile.equipped_item);
+    const image = await renderChickenImage(ownChicken, message.senderName, equipment);
+    const garageUrl = new URL(`/ga/${profile.manage_token}`, config.PUBLIC_ORIGIN).toString();
     return {
       image,
       message: lines(
         "🐓 " + ownChicken.name + " · Level " + ownChicken.level,
-        "Lực chiến: " + chickenPower(ownChicken).toLocaleString("vi-VN") + " · " + ownChicken.wins + " thắng / " + ownChicken.losses + " thua",
+        "Lực chiến: " + chickenPower(ownChicken, equipment.powerBonus).toLocaleString("vi-VN") + " · " + ownChicken.wins + " thắng / " + ownChicken.losses + " thua",
+        "Đang mang: " + equipment.name + (equipment.powerBonus ? " · +" + equipment.powerBonus.toLocaleString("vi-VN") + " lực chiến" : ""),
         "Nâng cấp kế: " + formatBetAmount(upgradeCost(ownChicken.level)),
+        "",
+        "Trang bị móng: " + garageUrl,
       ),
     };
   }
@@ -126,6 +135,8 @@ export async function handleChickenCommand(
     const targetChicken = repository.chicken(target.canonicalId);
     if (!targetChicken)
       return { message: target.name + " chưa có gà chiến nên chưa thể nhận kèo." };
+    const ownEquipment = chickenClawItem(repository.chickenWebProfile(message.senderId)?.equipped_item);
+    const challengedEquipment = chickenClawItem(repository.chickenWebProfile(target.canonicalId)?.equipped_item);
     const now = Date.now();
     const created = repository.createChickenChallenge({
       id: randomUUID(),
@@ -154,7 +165,7 @@ export async function handleChickenCommand(
       message: lines(
         "🥊 KÈO ĐÁ GÀ",
         "",
-        message.senderName + " (" + ownChicken.name + " · LC " + chickenPower(ownChicken).toLocaleString("vi-VN") + ") gạ @" + target.name + " (" + targetChicken.name + " · LC " + chickenPower(targetChicken).toLocaleString("vi-VN") + ")",
+        message.senderName + " (" + ownChicken.name + " · " + ownEquipment.name + " · LC " + chickenPower(ownChicken, ownEquipment.powerBonus).toLocaleString("vi-VN") + ") gạ @" + target.name + " (" + targetChicken.name + " · " + challengedEquipment.name + " · LC " + chickenPower(targetChicken, challengedEquipment.powerBonus).toLocaleString("vi-VN") + ")",
         "",
         "Cược mỗi bên: " + formatBetAmount(command.stake),
         "Tổng pot: " + formatBetAmount(command.stake * 2n),
@@ -180,8 +191,10 @@ export async function handleChickenCommand(
   const targetChicken = repository.chicken(challenge.target_id);
   if (!challengerChicken || !targetChicken)
     return { message: "Một trong hai chiến kê không còn tồn tại." };
-  let challengerScore = battleScore(challengerChicken, randomInt(85, 116));
-  let targetScore = battleScore(targetChicken, randomInt(85, 116));
+  const challengerEquipment = chickenClawItem(repository.chickenWebProfile(challenge.challenger_id)?.equipped_item);
+  const targetEquipment = chickenClawItem(repository.chickenWebProfile(challenge.target_id)?.equipped_item);
+  let challengerScore = battleScore(challengerChicken, randomInt(85, 116), challengerEquipment.powerBonus);
+  let targetScore = battleScore(targetChicken, randomInt(85, 116), targetEquipment.powerBonus);
   if (challengerScore === targetScore) {
     if (randomInt(0, 2) === 0) challengerScore += 1;
     else targetScore += 1;
@@ -230,6 +243,17 @@ export async function handleChickenCommand(
       "Số dư " + challenge.target_name + ": " + formatBetAmount(settled.targetAfter),
     ),
   };
+}
+
+function ensureChickenProfile(zaloId: string) {
+  const existing = repository.chickenWebProfile(zaloId);
+  if (existing) return existing;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const token = randomBytes(24).toString("base64url");
+    const created = repository.ensureChickenWebProfile(zaloId, token);
+    if (created) return created;
+  }
+  throw new Error("Không thể tạo liên kết garage riêng");
 }
 
 function cleanName(value: string) {

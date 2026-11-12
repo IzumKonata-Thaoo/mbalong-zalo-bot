@@ -3,6 +3,7 @@ import { z } from "zod";
 
 const schema = z.object({
   PORT: z.coerce.number().int().positive().default(8787),
+  HOST: z.string().default("127.0.0.1"),
   ADMIN_PASSWORD: z
     .string()
     .min(12)
@@ -27,7 +28,7 @@ const schema = z.object({
   FFMPEG_PATH: z.string().default("ffmpeg"),
   DATABASE_PATH: z.string().default("./data/bot.db"),
   SESSION_PATH: z.string().default("./data/zalo-session.json"),
-  PUBLIC_ORIGIN: z.string().default("http://localhost:8787"),
+  PUBLIC_ORIGIN: z.string().url().default("http://localhost:8787"),
   BOT_NAME: z.string().min(1).max(30).default("MbaLong"),
 });
 

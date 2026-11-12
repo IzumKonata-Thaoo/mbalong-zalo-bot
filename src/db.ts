@@ -105,6 +105,20 @@ CREATE TABLE IF NOT EXISTS chicken_challenges (
   resolved_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_chicken_challenge_target ON chicken_challenges(group_id,target_id,status,expires_at);
+CREATE TABLE IF NOT EXISTS chicken_web_profiles (
+  zalo_id TEXT PRIMARY KEY REFERENCES chickens(zalo_id) ON DELETE CASCADE,
+  manage_token TEXT NOT NULL UNIQUE,
+  pin_salt TEXT,
+  pin_hash TEXT,
+  equipped_item TEXT NOT NULL DEFAULT 'bare',
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS chicken_items (
+  zalo_id TEXT NOT NULL REFERENCES chickens(zalo_id) ON DELETE CASCADE,
+  item_id TEXT NOT NULL,
+  purchased_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(zalo_id,item_id)
+);
 `);
 
 function recordGameResult(
@@ -350,6 +364,46 @@ export const repository = {
       zalo_id:string;name:string;level:number;aggression:number;claws:number;
       comb:number;kick_power:number;wins:number;losses:number;updated_at:string;
     }|undefined;
+  },
+  chickenWebProfile(zaloId:string) {
+    return db.prepare("SELECT * FROM chicken_web_profiles WHERE zalo_id=?").get(zaloId) as {
+      zalo_id:string;manage_token:string;pin_salt:string|null;pin_hash:string|null;
+      equipped_item:string;updated_at:string;
+    }|undefined;
+  },
+  chickenWebProfileByToken(token:string) {
+    return db.prepare("SELECT * FROM chicken_web_profiles WHERE manage_token=?").get(token) as {
+      zalo_id:string;manage_token:string;pin_salt:string|null;pin_hash:string|null;
+      equipped_item:string;updated_at:string;
+    }|undefined;
+  },
+  ensureChickenWebProfile(zaloId:string,token:string) {
+    db.prepare(`INSERT OR IGNORE INTO chicken_web_profiles(zalo_id,manage_token) VALUES(?,?)`).run(zaloId,token);
+    return repository.chickenWebProfile(zaloId)!;
+  },
+  setChickenPinIfUnset(zaloId:string,salt:string,hash:string) {
+    return db.prepare(`UPDATE chicken_web_profiles SET pin_salt=?,pin_hash=?,updated_at=CURRENT_TIMESTAMP
+      WHERE zalo_id=? AND pin_hash IS NULL`).run(salt,hash,zaloId).changes===1;
+  },
+  chickenOwnedItems(zaloId:string) {
+    return (db.prepare("SELECT item_id FROM chicken_items WHERE zalo_id=? ORDER BY purchased_at").all(zaloId) as Array<{item_id:string}>).map((row)=>row.item_id);
+  },
+  purchaseOrEquipChickenItem(zaloId:string,itemId:string,price:bigint) {
+    return db.transaction(() => {
+      const profile=repository.chickenWebProfile(zaloId);
+      if(!profile)return {ok:false as const,reason:"no_profile" as const};
+      const owned=Boolean(db.prepare("SELECT 1 FROM chicken_items WHERE zalo_id=? AND item_id=?").get(zaloId,itemId));
+      const balance=repository.walletBalance(zaloId);
+      if(!owned&&balance<price)return {ok:false as const,reason:"insufficient" as const,balance};
+      const nextBalance=owned?balance:balance-price;
+      if(!owned){
+        db.prepare(`INSERT INTO wallets(zalo_id,balance,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)
+          ON CONFLICT(zalo_id) DO UPDATE SET balance=excluded.balance,updated_at=CURRENT_TIMESTAMP`).run(zaloId,nextBalance.toString());
+        db.prepare("INSERT INTO chicken_items(zalo_id,item_id) VALUES(?,?)").run(zaloId,itemId);
+      }
+      db.prepare("UPDATE chicken_web_profiles SET equipped_item=?,updated_at=CURRENT_TIMESTAMP WHERE zalo_id=?").run(itemId,zaloId);
+      return {ok:true as const,purchased:!owned,balance:nextBalance,equippedItem:itemId};
+    })();
   },
   createChicken(chicken:{zaloId:string;name:string;aggression:number;claws:number;comb:number;kickPower:number}) {
     const result=db.prepare(`INSERT OR IGNORE INTO chickens(zalo_id,name,aggression,claws,comb,kick_power)

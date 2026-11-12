@@ -35,7 +35,14 @@ fi
 node_major() { node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || echo 0; }
 if ! command -v node >/dev/null 2>&1 || (( $(node_major) < 22 )); then
   say "Cài Node.js 22"
-  curl -fsSL https://deb.nodesource.com/setup_22.x | $SUDO -E bash -
+  $SUDO apt-get update -y
+  $SUDO apt-get install -y ca-certificates curl gnupg
+  curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+    | gpg --dearmor \
+    | $SUDO tee /usr/share/keyrings/nodesource.gpg >/dev/null
+  echo "deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
+    | $SUDO tee /etc/apt/sources.list.d/nodesource.list >/dev/null
+  $SUDO apt-get update -y
   $SUDO apt-get install -y nodejs
 fi
 

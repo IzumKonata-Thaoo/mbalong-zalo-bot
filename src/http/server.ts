@@ -24,6 +24,21 @@ import {
   getGameSettings,
   saveGameSettings,
 } from "../games/game-settings.js";
+import {
+  CHICKEN_CLAW_ITEMS,
+  chickenClawItem,
+  publicChickenClawItem,
+} from "../games/chicken-equipment.js";
+import { renderChickenImage } from "../games/chicken-image.js";
+import {
+  chickenPinMatches,
+  hashChickenPin,
+  issueChickenToken,
+  requireChickenSession,
+  setChickenCookie,
+  type ChickenAuthRequest,
+} from "./chicken-auth.js";
+import { formatBetAmount } from "../games/tai-xiu-rules.js";
 
 const loginSchema = z.object({ password: z.string().min(1).max(256) });
 const idSchema = z.object({ id: z.string().min(1).max(64).regex(/^\d+$/) });
@@ -44,6 +59,51 @@ const gameSettingsSchema = z.object({
   wipeoutRate: z.number().int().min(0).max(100),
 });
 const attempts = new Map<string, { count: number; reset: number }>();
+const chickenAttempts = new Map<string, { count: number; reset: number }>();
+const chickenPinSchema = z.object({ pin: z.string().regex(/^\d{4,12}$/) });
+const chickenTokenSchema = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{24,64}$/) });
+
+function chickenRateLimited(key: string) {
+  const now = Date.now();
+  const state = chickenAttempts.get(key) ?? { count: 0, reset: now + 15 * 60_000 };
+  if (now > state.reset) {
+    state.count = 0;
+    state.reset = now + 15 * 60_000;
+  }
+  if (state.count >= 6) return true;
+  state.count++;
+  chickenAttempts.set(key, state);
+  return false;
+}
+
+function chickenGaragePayload(zaloId: string) {
+  const chicken = repository.chicken(zaloId);
+  const profile = repository.chickenWebProfile(zaloId);
+  if (!chicken || !profile) return null;
+  const owned = new Set(repository.chickenOwnedItems(zaloId));
+  const equipped = chickenClawItem(profile.equipped_item);
+  return {
+    chicken: {
+      name: chicken.name,
+      level: chicken.level,
+      aggression: chicken.aggression,
+      claws: chicken.claws,
+      comb: chicken.comb,
+      kickPower: chicken.kick_power,
+      wins: chicken.wins,
+      losses: chicken.losses,
+    },
+    balance: repository.walletBalance(zaloId).toString(),
+    balanceLabel: formatBetAmount(repository.walletBalance(zaloId)),
+    equippedItem: equipped.id,
+    equippedName: equipped.name,
+    items: CHICKEN_CLAW_ITEMS.map((item) => ({
+      ...publicChickenClawItem(item),
+      owned: owned.has(item.id),
+      equipped: profile.equipped_item === item.id,
+    })),
+  };
+}
 
 export function createServer() {
   const app = express();
@@ -85,6 +145,89 @@ export function createServer() {
   app.get("/api/auth/me", requireAdmin, (_req, res) =>
     res.json({ authenticated: true }),
   );
+
+  app.get("/api/chicken/:token/status", (req, res) => {
+    const parsed = chickenTokenSchema.safeParse(req.params);
+    if (!parsed.success) return res.status(404).json({ error: "Liên kết garage không hợp lệ" });
+    const profile = repository.chickenWebProfileByToken(parsed.data.token);
+    const chicken = profile ? repository.chicken(profile.zalo_id) : undefined;
+    if (!profile || !chicken) return res.status(404).json({ error: "Liên kết garage không hợp lệ" });
+    res.set("Cache-Control", "no-store").json({
+      valid: true,
+      pinConfigured: Boolean(profile.pin_hash),
+      chickenName: chicken.name,
+    });
+  });
+  app.post("/api/chicken/:token/setup", (req, res) => {
+    const token = chickenTokenSchema.safeParse(req.params);
+    const body = chickenPinSchema.safeParse(req.body);
+    if (!token.success || !body.success)
+      return res.status(400).json({ error: "PIN phải có từ 4 đến 12 chữ số" });
+    const profile = repository.chickenWebProfileByToken(token.data.token);
+    if (!profile) return res.status(404).json({ error: "Liên kết garage không hợp lệ" });
+    const key = `${req.ip ?? "unknown"}:${token.data.token}`;
+    if (chickenRateLimited(key)) return res.status(429).json({ error: "Thử lại sau 15 phút" });
+    if (profile.pin_hash) return res.status(409).json({ error: "Garage này đã có PIN" });
+    const secured = hashChickenPin(body.data.pin);
+    if (!repository.setChickenPinIfUnset(profile.zalo_id, secured.salt, secured.hash))
+      return res.status(409).json({ error: "Garage này vừa được đặt PIN" });
+    chickenAttempts.delete(key);
+    setChickenCookie(res, issueChickenToken(profile.zalo_id, profile.manage_token));
+    repository.audit(profile.zalo_id, "chicken.web_pin_setup", profile.zalo_id);
+    res.json({ ok: true });
+  });
+  app.post("/api/chicken/:token/login", (req, res) => {
+    const token = chickenTokenSchema.safeParse(req.params);
+    const body = chickenPinSchema.safeParse(req.body);
+    if (!token.success || !body.success)
+      return res.status(400).json({ error: "PIN phải có từ 4 đến 12 chữ số" });
+    const profile = repository.chickenWebProfileByToken(token.data.token);
+    if (!profile) return res.status(404).json({ error: "Liên kết garage không hợp lệ" });
+    const key = `${req.ip ?? "unknown"}:${token.data.token}`;
+    if (chickenRateLimited(key)) return res.status(429).json({ error: "Thử lại sau 15 phút" });
+    if (!profile?.pin_hash || !profile.pin_salt || !chickenPinMatches(body.data.pin, profile.pin_salt, profile.pin_hash))
+      return res.status(401).json({ error: "PIN không đúng" });
+    chickenAttempts.delete(key);
+    setChickenCookie(res, issueChickenToken(profile.zalo_id, profile.manage_token));
+    res.json({ ok: true });
+  });
+  app.post("/api/chicken/:token/logout", (_req, res) =>
+    res.clearCookie("chicken_session", { path: "/" }).json({ ok: true }),
+  );
+  app.get("/api/chicken/:token/garage", requireChickenSession, (req: ChickenAuthRequest, res) => {
+    const payload = chickenGaragePayload(req.chickenAuth!.zaloId);
+    if (!payload) return res.status(404).json({ error: "Không tìm thấy gà chiến" });
+    res.set("Cache-Control", "no-store").json(payload);
+  });
+  app.get("/api/chicken/:token/image", requireChickenSession, async (req: ChickenAuthRequest, res, next) => {
+    try {
+      const chicken = repository.chicken(req.chickenAuth!.zaloId);
+      const profile = repository.chickenWebProfile(req.chickenAuth!.zaloId);
+      if (!chicken || !profile) return res.status(404).end();
+      const preview = typeof req.query.preview === "string" ? req.query.preview : profile.equipped_item;
+      const item = chickenClawItem(preview);
+      const image = await renderChickenImage(chicken, "Tài khoản riêng", item);
+      res.set({ "Content-Type": "image/png", "Cache-Control": "no-store" }).send(image);
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.post("/api/chicken/:token/equipment/:itemId", requireChickenSession, (req: ChickenAuthRequest, res) => {
+    const item = CHICKEN_CLAW_ITEMS.find((candidate) => candidate.id === req.params.itemId);
+    if (!item) return res.status(404).json({ error: "Trang bị không tồn tại" });
+    const result = repository.purchaseOrEquipChickenItem(req.chickenAuth!.zaloId, item.id, item.price);
+    if (!result.ok) {
+      if (result.reason === "insufficient")
+        return res.status(409).json({ error: `Không đủ số dư. Hiện có ${formatBetAmount(result.balance)}` });
+      return res.status(409).json({ error: "Garage chưa sẵn sàng" });
+    }
+    repository.audit(req.chickenAuth!.zaloId, result.purchased ? "chicken.item_purchase" : "chicken.item_equip", item.id, {
+      price: result.purchased ? item.price.toString() : "0",
+      balanceAfter: result.balance.toString(),
+    });
+    res.json(chickenGaragePayload(req.chickenAuth!.zaloId));
+  });
+
   app.use("/api", requireAdmin);
   app.get("/api/dashboard", (_req, res) =>
     res.json({
